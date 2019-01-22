@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:html/parser.dart';
+import 'package:html/dom.dart';
 import 'package:intl/intl.dart';
 
 // A single sation stop on the NJ Transit system.
@@ -36,7 +37,7 @@ class Station {
         final fields = file.transform(utf8.decoder).transform(_csvCodec.decoder);
 
         await for (var row in fields) {
-          stationToChar[row[0]] = row[1].toString();
+          stationToChar[row[0]] = row[1].toString().trim();
         }
       }
 
@@ -85,6 +86,10 @@ class Train {
     return 'Train $trainNo (tripId ${tripId.toString()}) to $destinationStation';
   }
 
+  static RegExp removeLeadingZeros = new RegExp(r'^0+(?!$)');
+  static String _fixTrainNo(String rawTrainNo) {
+    return rawTrainNo.replaceFirst(removeLeadingZeros, '');
+  }
   static final _csvCodec = new CsvCodec(eol: '\n');
   static Future loadTrains() async {
     await Station.loadStations();
@@ -101,11 +106,10 @@ class Train {
       await for (var row in fields) {
         if (row[0] == 'route_id') continue;  // Skip header.
         int tripId = row[2];
-        String trainNo = row[5];
+        String trainNo = _fixTrainNo(row[5]);
         byTripId[tripId] = new Train(trainNo, Station.byStationName[row[3]], tripId);
         trainNoToTripId[trainNo] = tripId;
       }
-
       print('Loaded ${byTripId.length} trains from trips.txt');
     }
   }
@@ -125,7 +129,7 @@ class Stop {
   // Index of stops on tripId|fromStationId, loaded from the data files.
   static final Map<String, Stop> _stopsByTripId = Map();
 
-  static final DateFormat hourMinuteSecondsFormat = new DateFormat.Hms();
+  static final DateFormat _hourMinuteSecondsFormat = new DateFormat.Hms();
 
   Stop(this.train, this.departureStation, this.scheduledDepartureTime);
 
@@ -150,14 +154,14 @@ class Stop {
   String toString() {
     return 
       '$train from $departureStation ' +
-      'at ${hourMinuteSecondsFormat.format(scheduledDepartureTime)}';
+      'at ${_hourMinuteSecondsFormat.format(scheduledDepartureTime)}';
   }
 
   static final _csvCodec = new CsvCodec(eol: '\n');
   static Future loadStops() async {
     await Station.loadStations();
     await Train.loadTrains();
-
+    
     if (_stopsByTripId.isNotEmpty) {
       print('${_stopsByTripId.length} Stops already loaded.');
     } else {
@@ -170,8 +174,8 @@ class Stop {
         var tripId = row[0];
         var departureStationId = row[3];
         Train train = Train.byTripId[tripId];
-        Stop stop = new Stop(train, Station.byStopId[departureStationId], hourMinuteSecondsFormat.parse(row[2]));
-        _stopsByTripId['$tripId|$departureStationId'] = stop;
+        Stop stop = new Stop(train, Station.byStopId[departureStationId], _hourMinuteSecondsFormat.parse(row[2]));
+        _stopsByTripId[_key(tripId, departureStationId)] = stop;
       }
 
       print('Loaded ${_stopsByTripId.length} trains from stop_times.txt');    
@@ -198,50 +202,107 @@ class TrainStatus {
   // The current set of statuses, keyed on Stop.id().
   static final Map<String, TrainStatus> _statuses = Map();
 
+  static final DateFormat _timeDisplayFormat = new DateFormat.jm();
   @override
   String toString() {
-    return 'Status for $stop: $rawStatus departing at $calculatedDepartureTime (updated $lastUpdated)';
+    var departureStr = '';
+    if (calculatedDepartureTime == null) {
+      departureStr = 'no status yet; scheduled to depart at ${_timeDisplayFormat.format(stop.scheduledDepartureTime)}';
+    } else if (calculatedDepartureTime.hour == stop.scheduledDepartureTime.hour &&
+               calculatedDepartureTime.minute == stop.scheduledDepartureTime.minute) {
+      departureStr = 'on time at ${_timeDisplayFormat.format(stop.scheduledDepartureTime)}';
+    } else {
+      var lateStr = (calculatedDepartureTime.isAfter(stop.scheduledDepartureTime)) ? 'late' : 'early?!';
+      var diff = calculatedDepartureTime.difference(stop.scheduledDepartureTime).abs();
+      departureStr = 
+        'running ${diff.inMinutes} minutes $lateStr (scheduled ${_timeDisplayFormat.format(stop.scheduledDepartureTime)} ' +
+        'actual ${_timeDisplayFormat.format(calculatedDepartureTime)})';
+    }
+    var rawStatusStr = (rawStatus.isEmpty) ? '' : '$rawStatus, ';
+    return 
+      'Status for ${stop.train.trainNo} to ${stop.train.destinationStation}: ' +
+      '$departureStr (${rawStatusStr}updated ${_timeDisplayFormat.format(lastUpdated)})';
   }
 
-  static RegExp delayedRe = new RegExp(r'in (\d+) Min');
   static Future refreshStatuses(String stationName) async {
     await Station.loadStations();
-    await Stop.loadStops();
 
     var station = Station.byStationName[stationName];
+    String html = await fetchDepartureVision(station);
+    parseDepartureVision(html, station);
+  }
+
+  static Future<String> fetchDepartureVision(Station station) async {
     HttpClient http = HttpClient();
     try {
-      var uri = Uri.http('dv.njtransit.com', '/mobile/tid-mobile.aspx', {'sid': stationName});
+      var uri = Uri.http('dv.njtransit.com', '/mobile/tid-mobile.aspx', {'sid': station.twoLetterCode});
+      print('Fetching $uri');
       var request = await http.getUrl(uri);
       var response = await request.close();
       var responseBody = await response.transform(utf8.decoder).join();
       print('Response ${responseBody.substring(0, 50)}');
 
-      var document = parse(responseBody);
-      var rows = document.querySelectorAll('#GridView1 > tbody > tr');
-      print('Found ${rows.length} rows');
-      for (var row in rows) {
-        var cells = row.querySelectorAll('td');
-        var trainNo = cells[4].text;
-        var rawStatus = cells[5].text;
-        var stop = Stop.byTrainNo(trainNo, station.stopId);
-        if (rawStatus.isEmpty) {
-          _statuses[stop.id()] = TrainStatus(stop, rawStatus, null, DateTime.now());
-        } else if (delayedRe.hasMatch(rawStatus)) {
-          var minutesDelayed = int.parse(delayedRe.firstMatch(rawStatus).group(0));
-          var status = TrainStatus(
-            stop, rawStatus, 
-            stop.scheduledDepartureTime.add(new Duration(minutes: minutesDelayed)), 
-            DateTime.now()
-          );
-          print(status);
-          _statuses[stop.id()] = status;
-        } else {
-          print('Unknown status for train $trainNo from $stationName (stop.id() ${stop.id()}: $rawStatus');
-        }        
-      }
+      return responseBody;
     } catch (exception) {
       print(exception);
+      return '';
+    }
+  }
+
+  static RegExp _updatedTimeRe = new RegExp(r'(\d+:\d+ [AP]M)');
+  static DateTime _parseLastUpdatedTime(Document document) {
+    // Select all the divs because status messages sometimes pop up with weird formatting.
+    var div = document.querySelector('#Label2');
+    if (_updatedTimeRe.hasMatch(div.text)) {
+      var timeStr = _updatedTimeRe.firstMatch(div.text).group(1);
+      print('Found div ${div.text} with timeStr $timeStr');
+      return _timeDisplayFormat.parse(timeStr);
+    } else {
+      print('Could not find last updated time! Defaulting to now.');
+      // TODO: deal with time zones 
+      // https://stackoverflow.com/questions/26257481/how-to-convert-datetime-into-different-timezones
+      // https://pub.dartlang.org/documentation/timezone/latest/
+      var now = DateTime.now();
+      return new DateTime(now.year, now.month, now.day, now.hour, now.minute);
+    }
+  }
+
+  static RegExp _inNMinutesRe = new RegExp(r'in (\d+) Min');
+  static TrainStatus _parseRawStatus(String rawStatus, DateTime lastUpdated,Stop stop) {
+    if (rawStatus.isEmpty) {
+      return TrainStatus(stop, rawStatus, null, DateTime.now());
+    } else if (_inNMinutesRe.hasMatch(rawStatus)) {
+      var minutesDelayed = int.parse(_inNMinutesRe.firstMatch(rawStatus).group(1));
+      var calculatedDeparture = lastUpdated.add(new Duration(minutes: minutesDelayed));
+      return TrainStatus(stop, rawStatus, calculatedDeparture, lastUpdated);
+    } else {
+      return null;
+    }
+  }
+  // Parse a departurevision HTML file.
+  static Future parseDepartureVision(String html, Station station) async {
+    await Stop.loadStops();
+
+    var document = parse(html);
+    var lastUpdated = _parseLastUpdatedTime(document);
+
+    var rows = document.querySelectorAll('#GridView1 > tbody > tr');
+    for (var row in rows) {
+      var cells = row.querySelectorAll('td');
+      if (cells.length < 7) continue;
+      var trainNo = cells[5].text.trim();
+      if (int.tryParse(trainNo) == null) continue;
+      var rawStatus = cells[6].text.trim();
+      var stop = Stop.byTrainNo(trainNo, station.stopId);
+
+      TrainStatus status = _parseRawStatus(rawStatus, lastUpdated, stop);
+      if (status == null) {
+        print('Unable to parse status for train $trainNo from ${station.stationName} (stopId ${stop.id()}):');
+        print('$rawStatus');
+      } else {
+        print(status);
+        _statuses[stop.id()] = status;
+      }
     }
   }
 }
