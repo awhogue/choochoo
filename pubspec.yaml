@@ -23,6 +23,7 @@ dependencies:
   csv: ^4.0.1
   html: any
   intl: ^0.15.7
+  path: ^1.6.2
 
 dev_dependencies:
   flutter_test:
