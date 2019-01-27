@@ -169,19 +169,30 @@ class Stop {
   }
 }
 
+enum TrainState {
+  NotPosted,
+  OnTime,
+  Late,
+  Early,
+  AllAboard,
+  Canceled,
+}
+
 // A live train status from departure vision.
 class TrainStatus {
   // The Stop this status is associated with.
   final Stop stop;
   // The raw status from DepartureVision (e.g. "in 22 minutes" or "CANCELLED").
   final String rawStatus;
+  // A semantically parsed status state for the train, e.g. "canceled".
+  final TrainState state;
   // The actual departure time calculated from the rawStatus. If the train is canceled or no status has been posted, 
   // this will be null.
   final DateTime calculatedDepartureTime;
   // The last time this status was successfully refreshed from the server.
   final DateTime lastUpdated;
 
-  TrainStatus(this.stop, this.rawStatus, this.calculatedDepartureTime, this.lastUpdated);
+  TrainStatus(this.stop, this.rawStatus, this.state, this.calculatedDepartureTime, this.lastUpdated);
 
   // The current set of statuses, keyed on Stop.id().
   static final Map<String, TrainStatus> _statuses = Map();
@@ -195,23 +206,46 @@ class TrainStatus {
   @override
   String toString() {
     var rawStatusStr = (rawStatus.isEmpty) ? '' : '$rawStatus, ';
+    var status = statusForDisplay();
     return 
       'Status for ${stop.train.trainNo} to ${stop.train.destinationStation} ' + 
-      'scheduled at ${_timeDisplayFormat.format(stop.scheduledDepartureTime)}: ' +
-      '${statusForDisplay()} (${rawStatusStr}updated ${_timeDisplayFormat.format(lastUpdated)})';
+      '${status[0]}: ${status[1]} ' +
+      '(${rawStatusStr}updated ${_timeDisplayFormat.format(lastUpdated)})';
   }
 
-  String statusForDisplay() {
-    if (calculatedDepartureTime == null) {
-      return 'not yet posted';
-    } else if (calculatedDepartureTime.hour == stop.scheduledDepartureTime.hour &&
-               calculatedDepartureTime.minute == stop.scheduledDepartureTime.minute) {
-      return 'on time';
-    } else {
-      var lateStr = (calculatedDepartureTime.isAfter(stop.scheduledDepartureTime)) ? 'late' : 'early?!';
-      var diff = calculatedDepartureTime.difference(stop.scheduledDepartureTime).abs();
-      return 'now at ${_timeDisplayFormat.format(calculatedDepartureTime)}, ${diff.inMinutes} minutes $lateStr';
+  // Returns two strings: The first is the actual time of departure (either scheduled or calculated). 
+  // The second is a status message (e.g. "6 minutes late" or "not yet posted").
+  List<String> statusForDisplay() {
+    var calculatedDepartureDiff = 
+      (calculatedDepartureTime != null) ? 
+      calculatedDepartureTime.difference(stop.scheduledDepartureTime).abs().inMinutes : 
+      null;
+    var allAboardDiff = DateTime.now().difference(stop.scheduledDepartureTime).inMinutes;
+    switch (state) {
+      case TrainState.NotPosted: 
+        return ['scheduled ${_timeDisplayFormat.format(stop.scheduledDepartureTime)}',
+                'not yet posted'];
+      case TrainState.OnTime:
+        return [_timeDisplayFormat.format(stop.scheduledDepartureTime),
+                'on time'];
+      case TrainState.Late:
+        return ['now at ${_timeDisplayFormat.format(calculatedDepartureTime)}', 
+                '$calculatedDepartureDiff minutes late'];
+      case TrainState.Early:
+        return ['now at ${_timeDisplayFormat.format(calculatedDepartureTime)}', 
+                '$calculatedDepartureDiff minutes early'];
+      case TrainState.AllAboard: {
+        if (allAboardDiff == 0) {
+          return ['ALL ABOARD!', 'on time'];
+        } else if (allAboardDiff > 0) {
+          return ['ALL ABOARD', '$allAboardDiff minutes late'];
+        }
+        return ['ALL ABOARD', '$allAboardDiff minutes early!'];
+      }
+      case TrainState.Canceled: 
+        return ['CANCELED', ''];
     }
+    return [rawStatus, '(unknown status)'];
   }
 
   // Return the best known departure time for this train, meaning the scheduled time if no
@@ -337,11 +371,21 @@ class TrainStatus {
   static RegExp _inNMinutesRe = new RegExp(r'in (\d+) Min');
   static TrainStatus _parseRawStatus(String rawStatus, DateTime lastUpdated,Stop stop) {
     if (rawStatus.isEmpty) {
-      return TrainStatus(stop, rawStatus, null, DateTime.now());
+      return TrainStatus(stop, rawStatus, TrainState.NotPosted, null, DateTime.now());
     } else if (_inNMinutesRe.hasMatch(rawStatus)) {
       var minutesDelayed = int.parse(_inNMinutesRe.firstMatch(rawStatus).group(1));
       var calculatedDeparture = lastUpdated.add(new Duration(minutes: minutesDelayed));
-      return TrainStatus(stop, rawStatus, calculatedDeparture, lastUpdated);
+      var diff = calculatedDeparture.difference(stop.scheduledDepartureTime).inMinutes;
+      var state = () {
+        if (diff == 0) return TrainState.OnTime;
+        else if (diff > 0) return TrainState.Late;
+        else return TrainState.Early;
+      }();
+      return TrainStatus(stop, rawStatus, state, calculatedDeparture, lastUpdated);
+    } else if (rawStatus.toUpperCase() == 'ALL ABOARD') {
+      return TrainStatus(stop, rawStatus, TrainState.AllAboard, DateTime.now(), lastUpdated);
+    } else if (rawStatus.toUpperCase() == 'CANCELLED') {
+      return TrainStatus(stop, rawStatus, TrainState.Canceled, null, lastUpdated);
     } else {
       return null;
     }

@@ -22,6 +22,7 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
 
   @override
   Widget build(BuildContext context) {
+    var statusMessages = status.statusForDisplay();
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
       child: Column(
@@ -35,7 +36,7 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
                 ),
               ),
               Text(
-                status.statusForDisplay(),
+                statusMessages[1],
                 style: Theme.of(context).textTheme.title,
               ),
             ],
@@ -43,12 +44,12 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
           Row(
             children: [
               Expanded(
-                child: Text('Scheduled: ${_timeDisplayFormat.format(status.stop.scheduledDepartureTime)}'),
+                child: Text(
+                  statusMessages[0],
+                  style: Theme.of(context).textTheme.body1,
+                ),
               ),
-              Text(
-                'departing ${status.stop.departureStation.stationName}',
-                style: Theme.of(context).textTheme.body1,
-              ),
+              Text('Scheduled: ${_timeDisplayFormat.format(status.stop.scheduledDepartureTime)}'),
             ],
           ),
           Row(
