@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:html/parser.dart';
 import 'package:html/dom.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'file_utils.dart';
 
 // A single sation stop on the NJ Transit system.
@@ -26,16 +28,16 @@ class Station {
     return '$stationName ($twoLetterCode, $stopId)';
   }
 
-  static Future loadStations() async {
+  static Future loadStations(AssetBundle bundle) async {
     if (byStationName.isNotEmpty) {
       print('${byStationName.length} Stations already loaded.');
     } else {
       Map<String, String> stationToChar = new Map();
-      for (var row in FileUtils.csvFileToArray('njtransit_data/station2char.csv')) {
+      for (var row in await FileUtils.csvFileToArray('station2char.csv', bundle)) {
         stationToChar[row[0]] = row[1].toString().trim();
       }
 
-      for (var row in FileUtils.csvFileToArray('njtransit_data/stops.txt')) {
+      for (var row in await FileUtils.csvFileToArray('stops.txt', bundle)) {
         if (row[0] == 'stop_id') continue;  // Skip header.
         int stopId = row[0];
         String stationName = row[2];
@@ -80,8 +82,8 @@ class Train {
   static String _fixTrainNo(String rawTrainNo) {
     return rawTrainNo.replaceFirst(removeLeadingZeros, '');
   }
-  static Future loadTrains() async {
-    await Station.loadStations();
+  static Future loadTrains(AssetBundle bundle) async {
+    await Station.loadStations(bundle);
     
     if (byTripId.isNotEmpty) {
       print('${byTripId.length} Trains already loaded.');
@@ -89,7 +91,7 @@ class Train {
     } else {
       // TODO: distinguish by service_id for the current date (weekend vs. weekday). Need to join
       // with the calendar_dates.txt file?
-      for (var row in FileUtils.csvFileToArray('njtransit_data/trips.txt')) {
+      for (var row in await FileUtils.csvFileToArray('trips.txt', bundle)) {
         if (row[0] == 'route_id') continue;  // Skip header.
         int tripId = row[2];
         String trainNo = _fixTrainNo(row[5]);
@@ -144,14 +146,14 @@ class Stop {
       'at ${_hourMinuteSecondsFormat.format(scheduledDepartureTime)}';
   }
 
-  static Future loadStops() async {
-    await Station.loadStations();
-    await Train.loadTrains();
+  static Future loadStops(AssetBundle bundle) async {
+    await Station.loadStations(bundle);
+    await Train.loadTrains(bundle);
     
     if (_stopsByTripId.isNotEmpty) {
       print('${_stopsByTripId.length} Stops already loaded.');
     } else {
-      for (var row in FileUtils.csvFileToArray('njtransit_data/stop_times.txt')) {
+      for (var row in await FileUtils.csvFileToArray('stop_times.txt', bundle)) {
         if (row[0] == 'trip_id') continue;  // Skip header.
         var tripId = row[0];
         var departureStationId = row[3];
@@ -192,23 +194,24 @@ class TrainStatus {
   static final DateFormat _timeDisplayFormat = new DateFormat.jm();
   @override
   String toString() {
-    var departureStr = '';
+    var rawStatusStr = (rawStatus.isEmpty) ? '' : '$rawStatus, ';
+    return 
+      'Status for ${stop.train.trainNo} to ${stop.train.destinationStation} ' + 
+      'scheduled at ${_timeDisplayFormat.format(stop.scheduledDepartureTime)}: ' +
+      '${statusForDisplay()} (${rawStatusStr}updated ${_timeDisplayFormat.format(lastUpdated)})';
+  }
+
+  String statusForDisplay() {
     if (calculatedDepartureTime == null) {
-      departureStr = 'no status yet; scheduled to depart at ${_timeDisplayFormat.format(stop.scheduledDepartureTime)}';
+      return 'not yet posted';
     } else if (calculatedDepartureTime.hour == stop.scheduledDepartureTime.hour &&
                calculatedDepartureTime.minute == stop.scheduledDepartureTime.minute) {
-      departureStr = 'on time at ${_timeDisplayFormat.format(stop.scheduledDepartureTime)}';
+      return 'on time';
     } else {
       var lateStr = (calculatedDepartureTime.isAfter(stop.scheduledDepartureTime)) ? 'late' : 'early?!';
       var diff = calculatedDepartureTime.difference(stop.scheduledDepartureTime).abs();
-      departureStr = 
-        'running ${diff.inMinutes} minutes $lateStr (scheduled ${_timeDisplayFormat.format(stop.scheduledDepartureTime)} ' +
-        'actual ${_timeDisplayFormat.format(calculatedDepartureTime)})';
+      return 'now at ${_timeDisplayFormat.format(calculatedDepartureTime)}, ${diff.inMinutes} minutes $lateStr';
     }
-    var rawStatusStr = (rawStatus.isEmpty) ? '' : '$rawStatus, ';
-    return 
-      'Status for ${stop.train.trainNo} to ${stop.train.destinationStation}: ' +
-      '$departureStr (${rawStatusStr}updated ${_timeDisplayFormat.format(lastUpdated)})';
   }
 
   // Return the best known departure time for this train, meaning the scheduled time if no
@@ -227,12 +230,14 @@ class TrainStatus {
   // To disable the cache, set maxCacheAgeInMinutes to 0 or negative.
   static const _defaultMaxCacheAgeInMinutes = 5;
   static Future refreshStatuses(String stationName, 
-                                [ bool useCache = false,
+                                AssetBundle bundle,
+                                [ bool readCache = false,
+                                  bool writeCache = false,
                                   int maxCacheAgeInMinutes = _defaultMaxCacheAgeInMinutes ]) async {
-    await Station.loadStations();
+    await Station.loadStations(bundle);
     Station station = Station.byStationName[stationName];
-    String html = await _fetchDepartureVision(station, useCache, maxCacheAgeInMinutes);
-    await _parseDepartureVision(html, station, useCache);
+    String html = await _fetchDepartureVision(station, readCache, maxCacheAgeInMinutes);
+    await _parseDepartureVision(html, station, bundle, writeCache);
   }
 
   // Reformat the station name to make it usable for a filename.
@@ -240,18 +245,19 @@ class TrainStatus {
     return station.stationName.replaceAll(r'\W', '_').toLowerCase();
   }
 
-  static final _cacheDir = 'njtransit_data/dv_cache/';
-  static File _getCacheFile(Station station) {
+  static Future<File> _getCacheFile(Station station) async {
+    // Get the working directory for permanent storage of files for the app.
+    final directory = await getApplicationDocumentsDirectory();
     var filename = _normalizeStationName(station);
-    return new File(path.join(_cacheDir, '$filename.htm'));
+    return new File(path.join(directory.path, 'dv_cache', '$filename.htm'));
   }
   static bool _isCacheFileFresh(File cacheFile, int maxCacheAgeInMinutes) {
     return (DateTime.now().difference(cacheFile.lastModifiedSync()).inMinutes < maxCacheAgeInMinutes);
   }
   // Try to read the cache file for the given station. Returns null if the 
   // cache file is out of date or nonexistant.
-  static String _tryReadCacheFile(Station station, int maxCacheAgeInMinutes) {    
-    File cacheFile = _getCacheFile(station);
+  static Future<String> _tryReadCacheFile(Station station, int maxCacheAgeInMinutes) async {
+    File cacheFile = await _getCacheFile(station);
     if (cacheFile.existsSync()) {
       if (_isCacheFileFresh(cacheFile, maxCacheAgeInMinutes)) {
         print('Cache file $cacheFile is fresh. Using it.');
@@ -270,8 +276,8 @@ class TrainStatus {
   }
 
   // Write the given html to the station's cache file.
-  static void _tryWriteCacheFile(Station station, String html) {
-    File cacheFile = _getCacheFile(station);
+  static Future _tryWriteCacheFile(Station station, String html) async {
+    File cacheFile = await _getCacheFile(station);
     if (cacheFile.existsSync()) {
       print('Deleting old cache file $cacheFile');
       cacheFile.deleteSync();
@@ -283,7 +289,7 @@ class TrainStatus {
   // Fetch html from the DepartureVision site, or potentially the cache.
   // Disable the cache by setting maxCacheAge to 0 or negative.
   static Future<String> _fetchDepartureVision(Station station, bool useCache, int maxCacheAgeInMinutes) async {
-    String cached = (useCache) ? _tryReadCacheFile(station, maxCacheAgeInMinutes) : null;
+    String cached = (useCache) ? await _tryReadCacheFile(station, maxCacheAgeInMinutes) : null;
     if (null != cached) {
       return cached;
     }
@@ -333,10 +339,10 @@ class TrainStatus {
     }
   }
   // Parse a departurevision HTML file.
-  static Future _parseDepartureVision(String html, Station station, bool useCache) async {
+  static Future _parseDepartureVision(String html, Station station, AssetBundle bundle, bool useCache) async {
     print('Parsing DepartureVision html');
 
-    await Stop.loadStops();
+    await Stop.loadStops(bundle);
 
     var stopsFound = 0;
 
