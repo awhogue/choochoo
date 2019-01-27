@@ -34,7 +34,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
       await TrainStatus.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, false, 10000000);
     } else {
       // TODO: Replace 'HOHOKUS' with a list of stations that this user cares about.
-      await TrainStatus.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, true, 5);
+      await TrainStatus.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, true, 1);
     }
     return TrainStatus.statusesInOrder();
   }

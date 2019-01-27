@@ -237,7 +237,7 @@ class TrainStatus {
     await Station.loadStations(bundle);
     Station station = Station.byStationName[stationName];
     String html = await _fetchDepartureVision(station, readCache, maxCacheAgeInMinutes);
-    await _parseDepartureVision(html, station, bundle, writeCache);
+    await _parseDepartureVision(html, station, bundle, writeCache, maxCacheAgeInMinutes);
   }
 
   // Reformat the station name to make it usable for a filename.
@@ -247,9 +247,13 @@ class TrainStatus {
 
   static Future<File> _getCacheFile(Station station) async {
     // Get the working directory for permanent storage of files for the app.
-    final directory = await getApplicationDocumentsDirectory();
+    final appDirectory = await getApplicationDocumentsDirectory();
+    final cacheDirectory = new Directory(path.join(appDirectory.path, 'dv_cache'));
+    if (!cacheDirectory.existsSync()) {
+      cacheDirectory.createSync();
+    }
     var filename = _normalizeStationName(station);
-    return new File(path.join(directory.path, 'dv_cache', '$filename.htm'));
+    return new File(path.join(cacheDirectory.path, '$filename.htm'));
   }
   static bool _isCacheFileFresh(File cacheFile, int maxCacheAgeInMinutes) {
     return (DateTime.now().difference(cacheFile.lastModifiedSync()).inMinutes < maxCacheAgeInMinutes);
@@ -276,8 +280,12 @@ class TrainStatus {
   }
 
   // Write the given html to the station's cache file.
-  static Future _tryWriteCacheFile(Station station, String html) async {
+  static Future _tryWriteCacheFile(Station station, String html, int maxCacheAgeInMinutes) async {
     File cacheFile = await _getCacheFile(station);
+    if (_isCacheFileFresh(cacheFile, maxCacheAgeInMinutes)) {
+      print('Existing cache is still fresh, no need to overwrite.');
+    }
+    print('Writing cache for ${station.stationName} to $cacheFile');
     if (cacheFile.existsSync()) {
       print('Deleting old cache file $cacheFile');
       cacheFile.deleteSync();
@@ -339,7 +347,7 @@ class TrainStatus {
     }
   }
   // Parse a departurevision HTML file.
-  static Future _parseDepartureVision(String html, Station station, AssetBundle bundle, bool useCache) async {
+  static Future _parseDepartureVision(String html, Station station, AssetBundle bundle, bool useCache, int maxCacheAgeInMinutes) async {
     print('Parsing DepartureVision html');
 
     await Stop.loadStops(bundle);
@@ -371,7 +379,7 @@ class TrainStatus {
     print('Found $stopsFound stops');
 
     if (useCache && stopsFound > 0) {
-      _tryWriteCacheFile(station, html);
+      _tryWriteCacheFile(station, html, maxCacheAgeInMinutes);
     }
   }
 }

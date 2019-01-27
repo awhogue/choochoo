@@ -55,7 +55,7 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
             children: [
               Expanded(
                 child: Text(
-                  '(as of ${_timeDisplayFormat.format(status.lastUpdated)}',
+                  '(as of ${_timeDisplayFormat.format(status.lastUpdated)})',
                   textAlign: TextAlign.right,
                 ),
               ),
