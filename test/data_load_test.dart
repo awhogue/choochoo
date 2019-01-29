@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:test/test.dart';
-import 'package:choochoo/model.dart';
+import 'package:choochoo/datastore.dart';
 
 class TestAssetBundle extends CachingAssetBundle {
   @override
@@ -28,15 +28,15 @@ void main() async {
   });
 
   test('Test Data Load', () async {
-    await Station.loadStations(bundle);
-    await Stop.loadStops(bundle);
-    print(Stop.byTrainNo('1883', Station.byStationName['HOHOKUS'].stopId));
+    await Datastore.loadDataFiles(bundle);
+    print(Datastore.stopByTrainNo('1883', Datastore.stationsByStationName['HOHOKUS'].stopId));
   });
 
   test('Test DepartureVision', () async {
-    await TrainStatus.refreshStatuses('HOHOKUS', bundle, false, true, 1000000000);
-    print('${TrainStatus.statusesInOrder().length} statuses loaded.');
-    for (var status in TrainStatus.statusesInOrder()) {
+    await Datastore.loadDataFiles(bundle);
+    await Datastore.refreshStatuses('HOHOKUS', bundle, true, false, 1000000000);
+    print('${Datastore.statusesInOrder().length} statuses loaded.');
+    for (var status in Datastore.statusesInOrder()) {
       print(status);
     }
   });

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'train_status_card.dart';
 import 'file_utils.dart';
 import 'model.dart';
+import 'datastore.dart';
 
 void main() => runApp(MyApp());
 
@@ -38,12 +39,12 @@ class _ChooChooHomeState extends State<ChooChooHome> {
       print('Got ${cacheHtml.length} bytes of cached data');
       var cacheFile = await FileUtils.getCacheFile('HOHOKUS');
       cacheFile.writeAsStringSync(cacheHtml);
-      await TrainStatus.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, false, 10000000);
+      await Datastore.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, false, 10000000);
     } else {
       // TODO: Replace 'HOHOKUS' with a list of stations that this user cares about.
-      await TrainStatus.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, true, 1);
+      await Datastore.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, true, 1);
     }
-    return TrainStatus.statusesInOrder();
+    return Datastore.statusesInOrder();
   }
 
   @override
