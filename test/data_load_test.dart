@@ -34,7 +34,7 @@ void main() async {
   });
 
   test('Test DepartureVision', () async {
-    await TrainStatus.refreshStatuses('HOHOKUS', bundle, true, false, 1000000000);
+    await TrainStatus.refreshStatuses('HOHOKUS', bundle, false, true, 1000000000);
     print('${TrainStatus.statusesInOrder().length} statuses loaded.');
     for (var status in TrainStatus.statusesInOrder()) {
       print(status);

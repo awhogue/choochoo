@@ -5,8 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:html/parser.dart';
 import 'package:html/dom.dart';
 import 'package:intl/intl.dart';
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 import 'file_utils.dart';
 
 // A single sation stop on the NJ Transit system.
@@ -213,34 +211,33 @@ class TrainStatus {
       '(${rawStatusStr}updated ${_timeDisplayFormat.format(lastUpdated)})';
   }
 
+  String _minutesStr(int minutes) {
+    if (minutes == 0) return 'on time';
+    var minStr = (minutes.abs() == 1) ? 'minute' : 'minutes';
+    var lateStr = (minutes > 0) ? 'late' : 'early!';
+    return '$minutes $minStr $lateStr';
+  }
+
   // Returns two strings: The first is the actual time of departure (either scheduled or calculated). 
   // The second is a status message (e.g. "6 minutes late" or "not yet posted").
   List<String> statusForDisplay() {
-    var calculatedDepartureDiff = 
-      (calculatedDepartureTime != null) ? 
-      calculatedDepartureTime.difference(stop.scheduledDepartureTime).abs().inMinutes : 
-      null;
-    var allAboardDiff = DateTime.now().difference(stop.scheduledDepartureTime).inMinutes;
     switch (state) {
       case TrainState.NotPosted: 
-        return ['scheduled ${_timeDisplayFormat.format(stop.scheduledDepartureTime)}',
+        return ['',
                 'not yet posted'];
       case TrainState.OnTime:
         return [_timeDisplayFormat.format(stop.scheduledDepartureTime),
                 'on time'];
       case TrainState.Late:
-        return ['now at ${_timeDisplayFormat.format(calculatedDepartureTime)}', 
-                '$calculatedDepartureDiff minutes late'];
-      case TrainState.Early:
-        return ['now at ${_timeDisplayFormat.format(calculatedDepartureTime)}', 
-                '$calculatedDepartureDiff minutes early'];
+      case TrainState.Early: {
+        var calculatedDepartureDiff = calculatedDepartureTime.difference(stop.scheduledDepartureTime).inMinutes;
+        return ['now at ${_timeDisplayFormat.format(calculatedDepartureTime)}',
+                _minutesStr(calculatedDepartureDiff)];
+      }
       case TrainState.AllAboard: {
-        if (allAboardDiff == 0) {
-          return ['ALL ABOARD!', 'on time'];
-        } else if (allAboardDiff > 0) {
-          return ['ALL ABOARD', '$allAboardDiff minutes late'];
-        }
-        return ['ALL ABOARD', '$allAboardDiff minutes early!'];
+        var allAboardDiff = DateTime.now().difference(stop.scheduledDepartureTime).inMinutes;
+        return ['ALL ABOARD',
+                _minutesStr(allAboardDiff)];
       }
       case TrainState.Canceled: 
         return ['CANCELED', ''];
@@ -274,28 +271,13 @@ class TrainStatus {
     await _parseDepartureVision(html, station, bundle, writeCache, maxCacheAgeInMinutes);
   }
 
-  // Reformat the station name to make it usable for a filename.
-  static String _normalizeStationName(Station station) {
-    return station.stationName.replaceAll(r'\W', '_').toLowerCase();
-  }
-
-  static Future<File> _getCacheFile(Station station) async {
-    // Get the working directory for permanent storage of files for the app.
-    final appDirectory = await getApplicationDocumentsDirectory();
-    final cacheDirectory = new Directory(path.join(appDirectory.path, 'dv_cache'));
-    if (!cacheDirectory.existsSync()) {
-      cacheDirectory.createSync();
-    }
-    var filename = _normalizeStationName(station);
-    return new File(path.join(cacheDirectory.path, '$filename.htm'));
-  }
   static bool _isCacheFileFresh(File cacheFile, int maxCacheAgeInMinutes) {
     return (DateTime.now().difference(cacheFile.lastModifiedSync()).inMinutes < maxCacheAgeInMinutes);
   }
   // Try to read the cache file for the given station. Returns null if the 
   // cache file is out of date or nonexistant.
   static Future<String> _tryReadCacheFile(Station station, int maxCacheAgeInMinutes) async {
-    File cacheFile = await _getCacheFile(station);
+    File cacheFile = await FileUtils.getCacheFile(station.stationName);
     if (cacheFile.existsSync()) {
       if (_isCacheFileFresh(cacheFile, maxCacheAgeInMinutes)) {
         print('Cache file $cacheFile is fresh. Using it.');
@@ -315,7 +297,7 @@ class TrainStatus {
 
   // Write the given html to the station's cache file.
   static Future _tryWriteCacheFile(Station station, String html, int maxCacheAgeInMinutes) async {
-    File cacheFile = await _getCacheFile(station);
+    File cacheFile = await FileUtils.getCacheFile(station.stationName);
     if (_isCacheFileFresh(cacheFile, maxCacheAgeInMinutes)) {
       print('Existing cache is still fresh, no need to overwrite.');
     }
@@ -371,7 +353,7 @@ class TrainStatus {
   static RegExp _inNMinutesRe = new RegExp(r'in (\d+) Min');
   static TrainStatus _parseRawStatus(String rawStatus, DateTime lastUpdated,Stop stop) {
     if (rawStatus.isEmpty) {
-      return TrainStatus(stop, rawStatus, TrainState.NotPosted, null, DateTime.now());
+      return TrainStatus(stop, rawStatus, TrainState.NotPosted, stop.scheduledDepartureTime, DateTime.now());
     } else if (_inNMinutesRe.hasMatch(rawStatus)) {
       var minutesDelayed = int.parse(_inNMinutesRe.firstMatch(rawStatus).group(1));
       var calculatedDeparture = lastUpdated.add(new Duration(minutes: minutesDelayed));
@@ -385,7 +367,7 @@ class TrainStatus {
     } else if (rawStatus.toUpperCase() == 'ALL ABOARD') {
       return TrainStatus(stop, rawStatus, TrainState.AllAboard, DateTime.now(), lastUpdated);
     } else if (rawStatus.toUpperCase() == 'CANCELLED') {
-      return TrainStatus(stop, rawStatus, TrainState.Canceled, null, lastUpdated);
+      return TrainStatus(stop, rawStatus, TrainState.Canceled, stop.scheduledDepartureTime, lastUpdated);
     } else {
       return null;
     }

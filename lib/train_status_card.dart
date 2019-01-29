@@ -44,24 +44,14 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  statusMessages[0],
-                  style: Theme.of(context).textTheme.body1,
-                ),
+                child: Text('Scheduled: ${_timeDisplayFormat.format(status.stop.scheduledDepartureTime)}'),
               ),
-              Text('Scheduled: ${_timeDisplayFormat.format(status.stop.scheduledDepartureTime)}'),
+              Text(
+                statusMessages[0],
+                style: Theme.of(context).textTheme.body1,
+              ),
             ],
           ),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '(as of ${_timeDisplayFormat.format(status.lastUpdated)})',
-                  textAlign: TextAlign.right,
-                ),
-              ),
-            ]
-          )
         ]
       )
     );

@@ -45,5 +45,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/njtransit/
     - assets/
+    - assets/njtransit/
+    - assets/njtransit/dv_cache/
+
