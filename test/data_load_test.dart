@@ -30,7 +30,7 @@ void main() async {
 
   test('Test Data Load', () async {
     await Datastore.loadDataFiles(bundle);
-    print(Datastore.stopByTrainNo('1883', Datastore.stationsByStationName['HOHOKUS'].stopId));
+    print(Datastore.stopByTrainNo('1883', Datastore.stationByStationName['HOHOKUS'].stopId));
   });
 
   test('Test DepartureVision', () async {
@@ -45,7 +45,7 @@ void main() async {
   test('Test save and load WatchedStops', () async {
     await Datastore.loadDataFiles(bundle);
     WatchedStop ws = WatchedStop(
-      Datastore.stopByTrainNo('1156', Datastore.stationsByStationName['HOHOKUS'].stopId),
+      Datastore.stopByTrainNo('1156', Datastore.stationByStationName['HOHOKUS'].stopId),
       WatchedStop.weekdays);
 
     String json = Datastore.watchedStopsToJson([ws]);

@@ -29,22 +29,61 @@ class ChooChooHome extends StatefulWidget {
 
 class _ChooChooHomeState extends State<ChooChooHome> {
   static const _testMode = true;
-  List<TrainStatus> _statuses = List();
 
-  Future<List<TrainStatus>> _getTrainStatuses() async {
+  Future _loadData() async {
+    await Datastore.loadDataFiles(DefaultAssetBundle.of(context));
+    await Datastore.loadWatchedStops();
+    return await _getTrainStatuses();
+  }
+
+  Future _getTrainStatuses() async {
+    var bundle = DefaultAssetBundle.of(context);
     if (_testMode) {
       print('TEST MODE');
-      var bundle = DefaultAssetBundle.of(context);
-      var cacheHtml = await FileUtils.loadFile('dv_cache/hohokus.htm', bundle);
-      print('Got ${cacheHtml.length} bytes of cached data');
-      var cacheFile = await FileUtils.getCacheFile('HOHOKUS');
+      Datastore.clearWatchedStops();
+      var watchedStation = Datastore.stationByStationName['HOHOKUS'];
+      var filename = FileUtils.normalizeForFilename(watchedStation.stationName);
+      var cacheHtml = await FileUtils.loadFile('dv_cache/$filename.htm', bundle);
+      print('Got ${cacheHtml.length} bytes of cached data from $filename');
+      var cacheFile = await FileUtils.getCacheFile(watchedStation.stationName);
       cacheFile.writeAsStringSync(cacheHtml);
-      await Datastore.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, false, 10000000);
+      await Datastore.refreshStatuses(
+        watchedStation.stationName, DefaultAssetBundle.of(context), 
+        false, false, 10000000);
+
+      // For testing, just watch the next arrival.
+      var nextDeparture = Datastore.statusesInOrder()[0];
+      print('Watching $nextDeparture for testing');
+      Datastore.addWatchedStop(WatchedStop(nextDeparture.stop, WatchedStop.weekdays));
     } else {
-      // TODO: Replace 'HOHOKUS' with a list of stations that this user cares about.
-      await Datastore.refreshStatuses('HOHOKUS', DefaultAssetBundle.of(context), true, true, 1);
+      await _setUpDummyWatchedTrains();
+      var watchedStations = Datastore.watchedStops.values.map((ws) => ws.stop.departureStation).toList();
+      for (var watchedStation in watchedStations) {
+        await Datastore.refreshStatuses(
+          watchedStation.stationName, DefaultAssetBundle.of(context), 
+          true, true, 1);
+      }
     }
-    return Datastore.statusesInOrder();
+    return true;
+  }
+
+  Future _setUpDummyWatchedTrains() async {
+    // 8:03am from HOHOKUS
+    await Datastore.addWatchedStop(
+      WatchedStop(Datastore.stopByTripId(1162, Datastore.stationByStationName['HOHOKUS'].stopId),
+                  WatchedStop.weekdays)
+    );
+  }
+
+  // Filter the statuses to only include the trains we're watching.
+  List<TrainStatus> _watchedTrainStatuses() {
+    List<TrainStatus> statuses = List<TrainStatus>();
+    for (var key in Datastore.watchedStops.keys) {
+      if (Datastore.statuses.containsKey(key)) {
+        statuses.add(Datastore.statuses[key]);
+      }
+    }
+    return statuses;
   }
 
   @override
@@ -54,21 +93,34 @@ class _ChooChooHomeState extends State<ChooChooHome> {
         title: Text(widget.title),
       ),
       body: FutureBuilder(
-        future: _getTrainStatuses(),
+        future: _loadData(),
         builder: (BuildContext context, AsyncSnapshot snapshot) {
-          if (snapshot.hasError) print('Snapshot error: ${snapshot.error}');
-          if (!snapshot.hasData) {
-            print('no data yet');
-            return Center(child: CircularProgressIndicator());
-          } else if (snapshot.data == null) {
-            print('data is null');
-            return Center(child: Text('Set up some trains to watch!'));
-          } else {
-            print('got data!');
-            _statuses = snapshot.data;
-            return ListView(
-              children: _statuses.map((ts) => TrainStatusCard(ts)).toList(),
-            );
+          switch (snapshot.connectionState) {
+            case ConnectionState.none: {
+              print('ConnectionState.none??');
+              return Center(child: CircularProgressIndicator());
+            }
+            case ConnectionState.active:
+            case ConnectionState.waiting: {
+              print('no data yet');
+              return Center(child: CircularProgressIndicator());
+            }
+            case ConnectionState.done: {
+              if (snapshot.hasError) {
+                print('Snapshot error: ${snapshot.error}');
+                return Center(child: Text('Error retrieving train data: ${snapshot.error}'));
+              } else if (snapshot.data == null) {
+                print('data is null');
+                return Center(child: Text('Set up some trains to watch!'));
+              } else {
+                print('got data!');
+
+                List<TrainStatus> validStatuses = _watchedTrainStatuses();
+                return ListView(
+                  children: validStatuses.map((ts) => TrainStatusCard(ts)).toList(),
+                );
+              }
+            }
           }
         },
       ),

@@ -23,7 +23,7 @@ class FileUtils {
   }
 
   // Reformat the station name to make it usable for a filename.
-  static String _normalizeForFilename(String stationName) {
+  static String normalizeForFilename(String stationName) {
     return stationName.replaceAll(r'\W', '_').toLowerCase();
   }
 
@@ -36,7 +36,7 @@ class FileUtils {
     if (!cacheDirectory.existsSync()) {
       cacheDirectory.createSync();
     }
-    var filename = _normalizeForFilename(stationName);
+    var filename = normalizeForFilename(stationName);
     return new File(path.join(cacheDirectory.path, '$filename.htm'));
   }
 

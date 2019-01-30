@@ -20,25 +20,25 @@ class Datastore {
   // "Static" data about stations, trains, and stops, loaded from 
   // NJ Transit data files 
   /* **************************************************************** */
-  static final Map<String, Station> stationsByStationName = new Map();
-  static final Map<int, Station> stationsByStopId = new Map();
+  static final Map<String, Station> stationByStationName = new Map();
+  static final Map<int, Station> stationByStopId = new Map();
 
-  static final Map<int, Train> trainsByTripId = new Map();
+  static final Map<int, Train> trainByTripId = new Map();
   static final Map<String, int> trainNoToTripId = new Map();
 
   // Index of stops on tripId|fromStationId, loaded from the data files.
-  static final Map<String, Stop> _stopsByTripId = Map();
+  static final Map<String, Stop> _stopByTripId = Map();
 
   static Train trainFromTrainNo(String trainNo) {
     if (!trainNoToTripId.containsKey(trainNo)) {
       print('Unknmown trainNo: $trainNo');
       return null;
     }
-    return trainsByTripId[trainNoToTripId[trainNo]];
+    return trainByTripId[trainNoToTripId[trainNo]];
   }
   
   static Stop stopByTripId(int tripId, int depatureStationId) {
-    return _stopsByTripId[Stop.idFromRaw(tripId, depatureStationId)];
+    return _stopByTripId[Stop.idFromRaw(tripId, depatureStationId)];
   }
 
   static Stop stopByTrainNo(String trainNo, int departureStationId) {
@@ -51,19 +51,21 @@ class Datastore {
   // *******************************************************************
 
   // The current set of statuses, keyed on Stop.id().
-  static final Map<String, TrainStatus> _statuses = Map();
+  static final Map<String, TrainStatus> statuses = Map();
   
   static List<TrainStatus> statusesInOrder() {
-    var statuses = _statuses.values.toList();
-    statuses.sort((a, b) => a.getDepartureTime().compareTo(b.getDepartureTime()));
-    return statuses;
+    var statusList = statuses.values.toList();
+    statusList.sort((a, b) => a.getDepartureTime().compareTo(b.getDepartureTime()));
+    return statusList;
   }
 
   // *******************************************************************
   // User preferences data, including stops the user wants to be 
   // notified about.
   // *******************************************************************
-  static final List<WatchedStop> watchedStops = List();
+
+  // Stops the user is watching, keyed on Stop.id()
+  static final Map<String, WatchedStop> watchedStops = Map();
 
   // *******************************************************************
   // Initialization functions to load data.
@@ -75,8 +77,8 @@ class Datastore {
   static bool _dataFilesLoaded = false;
   static Future loadDataFiles(AssetBundle bundle) async {
     if (_dataFilesLoaded) {
-      print('loadDataFiles(): already loaded (${stationsByStationName.length} stations, ' +
-            '${trainsByTripId.length} Trains, ${_stopsByTripId.length} Stops)');
+      print('loadDataFiles(): already loaded (${stationByStationName.length} stations, ' +
+            '${trainByTripId.length} Trains, ${_stopByTripId.length} Stops)');
       return;
     }
     print('Loading datafiles...');
@@ -101,7 +103,7 @@ class Datastore {
     await loadDataFiles(bundle);
     print('Refreshing statuses...');
     var start = DateTime.now();
-    Station station = stationsByStationName[stationName];
+    Station station = stationByStationName[stationName];
     String html = await _fetchDepartureVision(station, readCache, maxCacheAgeInMinutes);
     await _parseDepartureVision(html, station, bundle, writeCache, maxCacheAgeInMinutes);
 
@@ -110,11 +112,22 @@ class Datastore {
   }
 
   static Future loadWatchedStops() async {
-    watchedStops.insertAll(0, loadWatchedStopsFromJson(_getPrefs().getString(_watchedStopsKey) ?? '[]'));
+    await _loadPrefs();
+    for (var ws in loadWatchedStopsFromJson(_prefs.getString(_watchedStopsKey) ?? '[]')) {
+      print(ws);
+      watchedStops[ws.stop.id()] = ws;
+    }
+    print('Loaded ${watchedStops.length} watched stops:');
   }
 
   static Future addWatchedStop(WatchedStop ws) async {
-    watchedStops.add(ws);
+    watchedStops[ws.stop.id()] = ws;
+    await _saveWatchedStops();
+  }
+
+  static Future clearWatchedStops() async {
+    print('Clearing watched stops!');
+    watchedStops.clear();
     await _saveWatchedStops();
   }
 
@@ -136,11 +149,11 @@ class Datastore {
       int stopId = row[0];
       String stationName = row[2];
       Station station = new Station(stationName, stationToChar[stationName], stopId);
-      stationsByStationName[stationName] = station;
-      stationsByStopId[stopId] = station;
+      stationByStationName[stationName] = station;
+      stationByStopId[stopId] = station;
     }
 
-    print('Loaded ${stationsByStationName.length} stations from stops.txt');
+    print('Loaded ${stationByStationName.length} stations from stops.txt');
   }
 
   static RegExp _removeLeadingZeros = new RegExp(r'^0+(?!$)');
@@ -154,10 +167,10 @@ class Datastore {
       if (row[0] == 'route_id') continue;  // Skip header.
       int tripId = row[2];
       String trainNo = _fixTrainNo(row[5]);
-      trainsByTripId[tripId] = new Train(trainNo, stationsByStationName[row[3]], tripId);
+      trainByTripId[tripId] = new Train(trainNo, stationByStationName[row[3]], tripId);
       trainNoToTripId[trainNo] = tripId;
     }
-    print('Loaded ${trainsByTripId.length} trains');
+    print('Loaded ${trainByTripId.length} trains');
     return;
   }
 
@@ -167,14 +180,14 @@ class Datastore {
       if (row[0] == 'trip_id') continue;  // Skip header.
       var tripId = row[0];
       var departureStationId = row[3];
-      Train train = trainsByTripId[tripId];
-      Stop stop = new Stop(train, stationsByStopId[departureStationId], _hourMinuteSecondsFormat.parse(row[2]));
-      _stopsByTripId[stop.id()] = stop;
+      Train train = trainByTripId[tripId];
+      Stop stop = new Stop(train, stationByStopId[departureStationId], _hourMinuteSecondsFormat.parse(row[2]));
+      _stopByTripId[stop.id()] = stop;
     }
 
-    print('Loaded ${_stopsByTripId.length} trains from stop_times.txt');    
+    print('Loaded ${_stopByTripId.length} trains from stop_times.txt');    
 
-    return _stopsByTripId;
+    return _stopByTripId;
   }
 
   static bool _isCacheFileFresh(File cacheFile, int maxCacheAgeInMinutes) {
@@ -225,18 +238,25 @@ class Datastore {
     }
 
     HttpClient http = HttpClient();
-    try {
-      var uri = Uri.http('dv.njtransit.com', '/mobile/tid-mobile.aspx', {'sid': station.twoLetterCode});
-      print('Fetching $uri');
-      var request = await http.getUrl(uri);
-      var response = await request.close();
-      var responseBody = await response.transform(utf8.decoder).join();
-      print('Response ${responseBody.substring(0, 50)}');
-      return responseBody;
-    } catch (exception) {
-      print(exception);
-      return '';
+    var uri = Uri.http('dv.njtransit.com', '/mobile/tid-mobile.aspx', {'sid': station.twoLetterCode});
+    final maxAttempts = 3;
+    final retryWait = 5;
+    for (var attempt = 0; attempt < maxAttempts; ++attempt) {
+      try {
+        print('Fetching $uri');
+        var request = await http.getUrl(uri);
+        var response = await request.close();
+        var responseBody = await response.transform(utf8.decoder).join();
+        print('Response ${responseBody.substring(0, 50)}');
+        return responseBody;
+      } catch (exception) {
+        print('EXCEPTION fetching $uri on attempt $attempt:');
+        print(exception);
+        sleep(Duration(seconds: retryWait));
+      }
     }
+    print('Too many exceptions, giving up.');
+    return '';
   }
 
   static RegExp _updatedTimeRe = new RegExp(r'(\d+:\d+ [AP]M)');
@@ -300,7 +320,7 @@ class Datastore {
         print('Unable to parse status for train $trainNo from ${station.stationName} (stopId ${stop.id()}):');
         print('$rawStatus');
       } else {
-        _statuses[stop.id()] = status;
+        statuses[stop.id()] = status;
         ++stopsFound;
       }
     }
@@ -313,9 +333,8 @@ class Datastore {
   }
 
   static SharedPreferences _prefs;
-  static _getPrefs() async { 
+  static Future _loadPrefs() async { 
     if (_prefs == null) _prefs = await SharedPreferences.getInstance();
-    return _prefs;
   }
   static const _watchedStopsKey = 'ChooChooWatchedStopsKey';
   static List<WatchedStop> loadWatchedStopsFromJson(String jsonStr) {
@@ -323,7 +342,8 @@ class Datastore {
     return watchedStopsJson.map<WatchedStop>((wsJson) => _watchedStopFromJson(wsJson)).toList();
   }
   static Future _saveWatchedStops() async {
-    _getPrefs().setString(_watchedStopsKey, watchedStopsToJson(watchedStops));
+    await _loadPrefs();
+    _prefs.setString(_watchedStopsKey, watchedStopsToJson(watchedStops.values.toList()));
   }
   static String watchedStopsToJson(List<WatchedStop> watchedStops) {
     return json.encode(watchedStops.map((ws) => _watchedStopToJson(ws)).toList());

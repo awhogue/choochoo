@@ -158,6 +158,6 @@ class WatchedStop {
 
   @override 
   String toString() {
-    return 'WatchedStop ${stop.departureStation.stationName} on $days';
+    return 'WatchedStop $stop on $days';
   }
 }
