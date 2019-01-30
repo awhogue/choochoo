@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:html/parser.dart';
 import 'package:html/dom.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'file_utils.dart';
 import 'model.dart';
 
@@ -26,6 +27,9 @@ class Datastore {
 
   // The current set of statuses, keyed on Stop.id().
   static final Map<String, TrainStatus> _statuses = Map();
+
+  static SharedPreferences _prefs = _getSharedPreferences();
+  static final List<WatchedStop> watchedStops = List();
 
   static Train trainFromTrainNo(String trainNo) {
     if (!trainNoToTripId.containsKey(trainNo)) {
@@ -67,6 +71,39 @@ class Datastore {
     var timing = DateTime.now().difference(start).inMilliseconds;
     print('Loaded data files in ${timing}ms.');
   }
+
+  static _getSharedPreferences() async { await SharedPreferences.getInstance(); }
+  static const _watchedStopsKey = 'ChooChooWatchedStopsKey';
+  static Future loadWatchedStops() async {
+    watchedStops.insertAll(0, loadWatchedStopsFromJson(_prefs.getString(_watchedStopsKey) ?? '[]'));
+  }
+  static List<WatchedStop> loadWatchedStopsFromJson(String jsonStr) {
+    List<dynamic> watchedStopsJson = json.decode(jsonStr);
+    return watchedStopsJson.map<WatchedStop>((wsJson) => _watchedStopFromJson(wsJson)).toList();
+  }
+
+  static Future saveWatchedStops() async {
+    _prefs.setString(_watchedStopsKey, watchedStopsToJson(watchedStops));
+  }
+  static String watchedStopsToJson(List<WatchedStop> watchedStops) {
+    return json.encode(watchedStops.map((ws) => _watchedStopToJson(ws)).toList());
+  }
+
+  static Future addWatchedStop(WatchedStop ws) async {
+    watchedStops.add(ws);
+    await saveWatchedStops();
+  }
+
+  static WatchedStop _watchedStopFromJson(Map<String, dynamic> json) {
+    return WatchedStop(stopByTripId(json['tripId'], json['departureStationId']), 
+                       List<int>.from(json['days']));
+  }
+
+  static Map<String, dynamic> _watchedStopToJson(WatchedStop ws) => {
+    'tripId': ws.stop.train.tripId,
+    'departureStationId': ws.stop.departureStation.stopId,
+    'days': ws.days
+  };
 
   // Refresh the list of statuses for the given station, either directly from
   // the DepartureVision site, or using the cache (if available and fresh). 

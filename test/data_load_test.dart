@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:test/test.dart';
 import 'package:choochoo/datastore.dart';
+import 'package:choochoo/model.dart';
 
 class TestAssetBundle extends CachingAssetBundle {
   @override
@@ -39,5 +40,22 @@ void main() async {
     for (var status in Datastore.statusesInOrder()) {
       print(status);
     }
+  });
+
+  test('Test save and load WatchedStops', () async {
+    await Datastore.loadDataFiles(bundle);
+    WatchedStop ws = WatchedStop(
+      Datastore.stopByTrainNo('1156', Datastore.stationsByStationName['HOHOKUS'].stopId),
+      WatchedStop.weekdays);
+
+    String json = Datastore.watchedStopsToJson([ws]);
+    List<WatchedStop> watchedStops = Datastore.loadWatchedStopsFromJson(json);
+
+    expect(watchedStops.length, equals(1));
+    WatchedStop restored = watchedStops[0];
+    print('Comparing:\n$ws\n$restored');
+
+    expect(restored.stop.id(), equals(ws.stop.id()));
+    expect(restored.days, equals(ws.days));
   });
 }

@@ -145,3 +145,19 @@ class TrainStatus {
     }
   }
 }
+
+// Represents a stop that a user is "watching" (i.e. wants to get notifications for).
+class WatchedStop {
+  Stop stop;
+  // The days of the week that the user cares about (list of DateTime.weekday ints).
+  List<int> days;
+  static const List<int> weekdays = [DateTime.monday, DateTime.tuesday, DateTime.wednesday, DateTime.thursday, DateTime.friday];
+  static const List<int> weekends = [DateTime.saturday, DateTime.sunday];
+
+  WatchedStop(this.stop, this.days);
+
+  @override 
+  String toString() {
+    return 'WatchedStop ${stop.departureStation.stationName} on $days';
+  }
+}
