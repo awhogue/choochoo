@@ -260,7 +260,7 @@ class Datastore {
   static RegExp _inNMinutesRe = new RegExp(r'in (\d+) Min');
   static TrainStatus _parseRawStatus(String rawStatus, DateTime lastUpdated,Stop stop) {
     if (rawStatus.isEmpty) {
-      return TrainStatus(stop, rawStatus, TrainState.NotPosted, stop.scheduledDepartureTime, DateTime.now());
+      return TrainStatus(stop, rawStatus, TrainState.NotPosted, stop.scheduledDepartureTime, lastUpdated);
     } else if (_inNMinutesRe.hasMatch(rawStatus)) {
       var minutesDelayed = int.parse(_inNMinutesRe.firstMatch(rawStatus).group(1));
       var calculatedDeparture = lastUpdated.add(new Duration(minutes: minutesDelayed));
