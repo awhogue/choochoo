@@ -16,6 +16,10 @@ import 'file_utils.dart';
 import 'model.dart';
 
 class Datastore {
+  /* **************************************************************** */
+  // "Static" data about stations, trains, and stops, loaded from 
+  // NJ Transit data files 
+  /* **************************************************************** */
   static final Map<String, Station> stationsByStationName = new Map();
   static final Map<int, Station> stationsByStopId = new Map();
 
@@ -24,12 +28,6 @@ class Datastore {
 
   // Index of stops on tripId|fromStationId, loaded from the data files.
   static final Map<String, Stop> _stopsByTripId = Map();
-
-  // The current set of statuses, keyed on Stop.id().
-  static final Map<String, TrainStatus> _statuses = Map();
-
-  static SharedPreferences _prefs = _getSharedPreferences();
-  static final List<WatchedStop> watchedStops = List();
 
   static Train trainFromTrainNo(String trainNo) {
     if (!trainNoToTripId.containsKey(trainNo)) {
@@ -47,17 +45,36 @@ class Datastore {
     return stopByTripId(trainNoToTripId[trainNo], departureStationId);
   }
 
+  // *******************************************************************
+  // "Live" data about train status from DepartureVIsion, loaded from 
+  // the DepartureVision site.
+  // *******************************************************************
+
+  // The current set of statuses, keyed on Stop.id().
+  static final Map<String, TrainStatus> _statuses = Map();
+  
   static List<TrainStatus> statusesInOrder() {
     var statuses = _statuses.values.toList();
     statuses.sort((a, b) => a.getDepartureTime().compareTo(b.getDepartureTime()));
     return statuses;
   }
 
-  // Load data from files.
+  // *******************************************************************
+  // User preferences data, including stops the user wants to be 
+  // notified about.
+  // *******************************************************************
+  static final List<WatchedStop> watchedStops = List();
+
+  // *******************************************************************
+  // Initialization functions to load data.
+  // The main API is:
+  //   loadDataFiles() – load "static" data from disk.
+  //   refreshStatuses() - refresh status from DepartureVision
+  //   loadWatchedStops() / addWatchedStop() – load/add a stop the user wants to watch.
+  // *******************************************************************
+  static bool _dataFilesLoaded = false;
   static Future loadDataFiles(AssetBundle bundle) async {
-    if (stationsByStationName.isNotEmpty && 
-        trainsByTripId.isNotEmpty &&
-        _stopsByTripId.isNotEmpty) {
+    if (_dataFilesLoaded) {
       print('loadDataFiles(): already loaded (${stationsByStationName.length} stations, ' +
             '${trainsByTripId.length} Trains, ${_stopsByTripId.length} Stops)');
       return;
@@ -70,40 +87,8 @@ class Datastore {
     
     var timing = DateTime.now().difference(start).inMilliseconds;
     print('Loaded data files in ${timing}ms.');
+    _dataFilesLoaded = true;
   }
-
-  static _getSharedPreferences() async { await SharedPreferences.getInstance(); }
-  static const _watchedStopsKey = 'ChooChooWatchedStopsKey';
-  static Future loadWatchedStops() async {
-    watchedStops.insertAll(0, loadWatchedStopsFromJson(_prefs.getString(_watchedStopsKey) ?? '[]'));
-  }
-  static List<WatchedStop> loadWatchedStopsFromJson(String jsonStr) {
-    List<dynamic> watchedStopsJson = json.decode(jsonStr);
-    return watchedStopsJson.map<WatchedStop>((wsJson) => _watchedStopFromJson(wsJson)).toList();
-  }
-
-  static Future saveWatchedStops() async {
-    _prefs.setString(_watchedStopsKey, watchedStopsToJson(watchedStops));
-  }
-  static String watchedStopsToJson(List<WatchedStop> watchedStops) {
-    return json.encode(watchedStops.map((ws) => _watchedStopToJson(ws)).toList());
-  }
-
-  static Future addWatchedStop(WatchedStop ws) async {
-    watchedStops.add(ws);
-    await saveWatchedStops();
-  }
-
-  static WatchedStop _watchedStopFromJson(Map<String, dynamic> json) {
-    return WatchedStop(stopByTripId(json['tripId'], json['departureStationId']), 
-                       List<int>.from(json['days']));
-  }
-
-  static Map<String, dynamic> _watchedStopToJson(WatchedStop ws) => {
-    'tripId': ws.stop.train.tripId,
-    'departureStationId': ws.stop.departureStation.stopId,
-    'days': ws.days
-  };
 
   // Refresh the list of statuses for the given station, either directly from
   // the DepartureVision site, or using the cache (if available and fresh). 
@@ -123,6 +108,19 @@ class Datastore {
     var timing = DateTime.now().difference(start).inMilliseconds;
     print('Loaded statuses in ${timing}ms.');
   }
+
+  static Future loadWatchedStops() async {
+    watchedStops.insertAll(0, loadWatchedStopsFromJson(_getPrefs().getString(_watchedStopsKey) ?? '[]'));
+  }
+
+  static Future addWatchedStop(WatchedStop ws) async {
+    watchedStops.add(ws);
+    await _saveWatchedStops();
+  }
+
+  // *******************************************************************
+  // Internal functions.
+  // *******************************************************************
 
   static Future _loadStations(AssetBundle bundle) async {
     // TODO: probably want to have some sort of real lock while loading data so we don't
@@ -313,4 +311,32 @@ class Datastore {
       _tryWriteCacheFile(station, html, maxCacheAgeInMinutes);
     }
   }
+
+  static SharedPreferences _prefs;
+  static _getPrefs() async { 
+    if (_prefs == null) _prefs = await SharedPreferences.getInstance();
+    return _prefs;
+  }
+  static const _watchedStopsKey = 'ChooChooWatchedStopsKey';
+  static List<WatchedStop> loadWatchedStopsFromJson(String jsonStr) {
+    List<dynamic> watchedStopsJson = json.decode(jsonStr);
+    return watchedStopsJson.map<WatchedStop>((wsJson) => _watchedStopFromJson(wsJson)).toList();
+  }
+  static Future _saveWatchedStops() async {
+    _getPrefs().setString(_watchedStopsKey, watchedStopsToJson(watchedStops));
+  }
+  static String watchedStopsToJson(List<WatchedStop> watchedStops) {
+    return json.encode(watchedStops.map((ws) => _watchedStopToJson(ws)).toList());
+  }
+
+  static WatchedStop _watchedStopFromJson(Map<String, dynamic> json) {
+    return WatchedStop(stopByTripId(json['tripId'], json['departureStationId']), 
+                       List<int>.from(json['days']));
+  }
+
+  static Map<String, dynamic> _watchedStopToJson(WatchedStop ws) => {
+    'tripId': ws.stop.train.tripId,
+    'departureStationId': ws.stop.departureStation.stopId,
+    'days': ws.days
+  };
 }
