@@ -3,6 +3,7 @@ import 'train_status_card.dart';
 import 'file_utils.dart';
 import 'model.dart';
 import 'datastore.dart';
+import 'notifications.dart';
 
 void main() => runApp(MyApp());
 
@@ -29,6 +30,10 @@ class ChooChooHome extends StatefulWidget {
 
 class _ChooChooHomeState extends State<ChooChooHome> {
   static const _testMode = true;
+  ChooChooNotifications _notifications;
+  _ChooChooHomeState() {
+    _notifications = ChooChooNotifications(context);
+  } 
 
   Future _loadData() async {
     await Datastore.loadDataFiles(DefaultAssetBundle.of(context));
@@ -114,8 +119,11 @@ class _ChooChooHomeState extends State<ChooChooHome> {
                 return Center(child: Text('Set up some trains to watch!'));
               } else {
                 print('got data!');
-
                 List<TrainStatus> validStatuses = _watchedTrainStatuses();
+                if (validStatuses.isNotEmpty) {
+                  _notifications.trainStatusNotification(validStatuses[0]);
+                }
+                
                 return ListView(
                   children: validStatuses.map((ts) => TrainStatusCard(ts)).toList(),
                 );

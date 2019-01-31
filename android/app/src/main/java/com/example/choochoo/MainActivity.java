@@ -1,4 +1,4 @@
-package com.example.choochoo;
+package org.secondthought.choochoo;
 
 import android.os.Bundle;
 import io.flutter.app.FlutterActivity;

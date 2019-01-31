@@ -252,6 +252,7 @@ class Datastore {
       } catch (exception) {
         print('EXCEPTION fetching $uri on attempt $attempt:');
         print(exception);
+        print('Pausing for $retryWait seconds before retrying...');
         sleep(Duration(seconds: retryWait));
       }
     }
