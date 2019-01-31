@@ -35,9 +35,9 @@ void main() async {
 
   test('Test DepartureVision', () async {
     await Datastore.loadDataFiles(bundle);
-    await Datastore.refreshStatuses('HOHOKUS', bundle, true, false, 1000000000);
-    print('${Datastore.statusesInOrder().length} statuses loaded.');
-    for (var status in Datastore.statusesInOrder()) {
+    var station = Datastore.stationByStationName['HOHOKUS'];
+    await Datastore.refreshStatuses(station, bundle, true, false, 1000000000);
+    for (var status in Datastore.statusesInOrder(station)) {
       print(status);
     }
   });

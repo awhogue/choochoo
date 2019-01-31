@@ -50,13 +50,26 @@ class Datastore {
   // the DepartureVision site.
   // *******************************************************************
 
-  // The current set of statuses, keyed on Stop.id().
-  static final Map<String, TrainStatus> statuses = Map();
+  // The current set of statuses, keyed on Station.stationName.
+  static final Map<String, List<TrainStatus>> statuses = Map();
   
-  static List<TrainStatus> statusesInOrder() {
-    var statusList = statuses.values.toList();
+  // The list of statuses in chronological order for the given station.
+  static List<TrainStatus> statusesInOrder(Station station) {
+    if (!statuses.containsKey(station.stationName)) {
+      print('No statuses for ${station.stationName}, did you call refreshStatuses?');
+      return [];
+    }
+    var statusList = statuses[station.stationName];
     statusList.sort((a, b) => a.getDepartureTime().compareTo(b.getDepartureTime()));
     return statusList;
+  }
+
+  static List<TrainStatus> allStatuses() {
+    List<TrainStatus> all = [];
+    for (var lst in statuses.values) {
+      all.addAll(lst);
+    }
+    return all;
   }
 
   // *******************************************************************
@@ -95,7 +108,7 @@ class Datastore {
   // Refresh the list of statuses for the given station, either directly from
   // the DepartureVision site, or using the cache (if available and fresh). 
   static const _defaultMaxCacheAgeInMinutes = 5;
-  static Future refreshStatuses(String stationName, 
+  static Future refreshStatuses(Station station, 
                                 AssetBundle bundle,
                                 [ bool readCache = false,
                                   bool writeCache = false,
@@ -103,7 +116,6 @@ class Datastore {
     await loadDataFiles(bundle);
     print('Refreshing statuses...');
     var start = DateTime.now();
-    Station station = stationByStationName[stationName];
     String html = await _fetchDepartureVision(station, readCache, maxCacheAgeInMinutes);
     await _parseDepartureVision(html, station, bundle, writeCache, maxCacheAgeInMinutes);
 
@@ -302,7 +314,8 @@ class Datastore {
   }
   // Parse a departurevision HTML file.
   static Future _parseDepartureVision(String html, Station station, AssetBundle bundle, bool useCache, int maxCacheAgeInMinutes) async {
-    var stopsFound = 0;
+    var statusesFound = 0;
+    statuses.putIfAbsent(station.stationName, () => List<TrainStatus>());
 
     var document = parse(html);
     var lastUpdated = _parseLastUpdatedTime(document);
@@ -321,14 +334,14 @@ class Datastore {
         print('Unable to parse status for train $trainNo from ${station.stationName} (stopId ${stop.id()}):');
         print('$rawStatus');
       } else {
-        statuses[stop.id()] = status;
-        ++stopsFound;
+        statuses[station.stationName].add(status);
+        ++statusesFound;
       }
     }
 
-    print('Found $stopsFound stops');
+    print('Found $statusesFound statuses');
 
-    if (useCache && stopsFound > 0) {
+    if (useCache && statusesFound > 0) {
       _tryWriteCacheFile(station, html, maxCacheAgeInMinutes);
     }
   }

@@ -53,7 +53,5 @@ class ChooChooNotifications {
           statusStrs[1], status.stop.id());
       }
     }
-    
-
   }
 }

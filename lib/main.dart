@@ -30,7 +30,9 @@ class ChooChooHome extends StatefulWidget {
 
 class _ChooChooHomeState extends State<ChooChooHome> {
   static const _testMode = true;
+
   ChooChooNotifications _notifications;
+  
   _ChooChooHomeState() {
     _notifications = ChooChooNotifications(context);
   } 
@@ -53,26 +55,26 @@ class _ChooChooHomeState extends State<ChooChooHome> {
       var cacheFile = await FileUtils.getCacheFile(watchedStation.stationName);
       cacheFile.writeAsStringSync(cacheHtml);
       await Datastore.refreshStatuses(
-        watchedStation.stationName, DefaultAssetBundle.of(context), 
+        watchedStation, DefaultAssetBundle.of(context), 
         false, false, 10000000);
 
       // For testing, just watch the next arrival.
-      var nextDeparture = Datastore.statusesInOrder()[0];
+      var nextDeparture = Datastore.statusesInOrder(watchedStation)[0];
       print('Watching $nextDeparture for testing');
       Datastore.addWatchedStop(WatchedStop(nextDeparture.stop, WatchedStop.weekdays));
     } else {
-      await _setUpDummyWatchedTrains();
+      await _setUpDummyWatchedStops();
       var watchedStations = Datastore.watchedStops.values.map((ws) => ws.stop.departureStation).toList();
       for (var watchedStation in watchedStations) {
         await Datastore.refreshStatuses(
-          watchedStation.stationName, DefaultAssetBundle.of(context), 
+          watchedStation, DefaultAssetBundle.of(context), 
           true, true, 1);
       }
     }
     return true;
   }
 
-  Future _setUpDummyWatchedTrains() async {
+  Future _setUpDummyWatchedStops() async {
     // 8:03am from HOHOKUS
     await Datastore.addWatchedStop(
       WatchedStop(Datastore.stopByTripId(1162, Datastore.stationByStationName['HOHOKUS'].stopId),
@@ -83,9 +85,9 @@ class _ChooChooHomeState extends State<ChooChooHome> {
   // Filter the statuses to only include the trains we're watching.
   List<TrainStatus> _watchedTrainStatuses() {
     List<TrainStatus> statuses = List<TrainStatus>();
-    for (var key in Datastore.watchedStops.keys) {
-      if (Datastore.statuses.containsKey(key)) {
-        statuses.add(Datastore.statuses[key]);
+    for (var status in Datastore.allStatuses()) {
+      if (Datastore.watchedStops.containsKey(status)) {
+        statuses.add(status);
       }
     }
     return statuses;
