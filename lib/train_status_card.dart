@@ -2,7 +2,7 @@
 // (scheduled time, actual time, canceled, etc.).
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'display_utils.dart';
 import 'model.dart';
 
 class TrainStatusCard extends StatefulWidget {
@@ -18,42 +18,24 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
 
    _TrainStatusCardState(this.status);
 
-  static final DateFormat _timeDisplayFormat = new DateFormat.jm();
-
   @override
   Widget build(BuildContext context) {
-    var statusMessages = status.statusForDisplay();
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Train #${status.stop.train.trainNo}',
-                  style: Theme.of(context).textTheme.title,
-                ),
-              ),
-              Text(
-                statusMessages[1],
-                style: Theme.of(context).textTheme.title,
-              ),
-            ],
+          Text(
+            'Train #${status.stop.train.trainNo}',
+            style: Theme.of(context).textTheme.title,
           ),
-          Row(
-            children: [
-              Expanded(
-                child: Text('Scheduled: ${_timeDisplayFormat.format(status.stop.scheduledDepartureTime)}'),
-              ),
-              Text(
-                statusMessages[0],
-                style: Theme.of(context).textTheme.body1,
-              ),
-            ],
+          Text(
+            DisplayUtils.shortStatus(status),
+            style: Theme.of(context).textTheme.title,
           ),
-        ]
-      )
+          Text(DisplayUtils.timeStatus(status)),
+        ],
+      ),
     );
   }
 }

@@ -56,7 +56,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
       cacheFile.writeAsStringSync(cacheHtml);
       await Datastore.refreshStatuses(
         watchedStation, DefaultAssetBundle.of(context), 
-        false, false, 10000000);
+        true, false, 10000000);
 
       // For testing, just watch the next arrival.
       var nextDeparture = Datastore.statusesInOrder(watchedStation)[0];
@@ -84,9 +84,11 @@ class _ChooChooHomeState extends State<ChooChooHome> {
 
   // Filter the statuses to only include the trains we're watching.
   List<TrainStatus> _watchedTrainStatuses() {
+    print('watchedStops: ${Datastore.watchedStops}');
     List<TrainStatus> statuses = List<TrainStatus>();
     for (var status in Datastore.allStatuses()) {
-      if (Datastore.watchedStops.containsKey(status)) {
+      print('Considering $status');
+      if (Datastore.watchedStops.containsKey(status.stop.id())) {
         statuses.add(status);
       }
     }
@@ -120,8 +122,8 @@ class _ChooChooHomeState extends State<ChooChooHome> {
                 print('data is null');
                 return Center(child: Text('Set up some trains to watch!'));
               } else {
-                print('got data!');
                 List<TrainStatus> validStatuses = _watchedTrainStatuses();
+                print('Working with ${validStatuses.length} valid statuses');
                 if (validStatuses.isNotEmpty) {
                   _notifications.trainStatusNotification(validStatuses[0]);
                 }

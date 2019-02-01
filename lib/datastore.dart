@@ -50,8 +50,9 @@ class Datastore {
   // the DepartureVision site.
   // *******************************************************************
 
-  // The current set of statuses, keyed on Station.stationName.
-  static final Map<String, List<TrainStatus>> statuses = Map();
+  // The current set of statuses, keyed on Station.stationName. Each value
+  // is a map from Stop.id() to a status.
+  static final Map<String, Map<String, TrainStatus>> statuses = Map();
   
   // The list of statuses in chronological order for the given station.
   static List<TrainStatus> statusesInOrder(Station station) {
@@ -59,15 +60,15 @@ class Datastore {
       print('No statuses for ${station.stationName}, did you call refreshStatuses?');
       return [];
     }
-    var statusList = statuses[station.stationName];
+    var statusList = statuses[station.stationName].values.toList();
     statusList.sort((a, b) => a.getDepartureTime().compareTo(b.getDepartureTime()));
     return statusList;
   }
 
   static List<TrainStatus> allStatuses() {
     List<TrainStatus> all = [];
-    for (var lst in statuses.values) {
-      all.addAll(lst);
+    for (var mp in statuses.values) {
+      all.addAll(mp.values.toList());
     }
     return all;
   }
@@ -315,7 +316,7 @@ class Datastore {
   // Parse a departurevision HTML file.
   static Future _parseDepartureVision(String html, Station station, AssetBundle bundle, bool useCache, int maxCacheAgeInMinutes) async {
     var statusesFound = 0;
-    statuses.putIfAbsent(station.stationName, () => List<TrainStatus>());
+    statuses.putIfAbsent(station.stationName, () => Map<String, TrainStatus>());
 
     var document = parse(html);
     var lastUpdated = _parseLastUpdatedTime(document);
@@ -334,7 +335,7 @@ class Datastore {
         print('Unable to parse status for train $trainNo from ${station.stationName} (stopId ${stop.id()}):');
         print('$rawStatus');
       } else {
-        statuses[station.stationName].add(status);
+        statuses[station.stationName][status.stop.id()] = status;
         ++statusesFound;
       }
     }

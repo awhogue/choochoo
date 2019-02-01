@@ -1,4 +1,4 @@
-import 'package:intl/intl.dart';
+import 'display_utils.dart';
 
 // A single sation stop on the NJ Transit system.
 class Station {
@@ -56,12 +56,11 @@ class Stop {
     return '$tripId|$departureStationId';
   }
 
-  static final DateFormat _timeDisplayFormat = new DateFormat.jm();
   @override
   String toString() {
     return 
       '$train from $departureStation ' +
-      'at ${_timeDisplayFormat.format(scheduledDepartureTime)}';
+      'at ${DisplayUtils.timeDisplayFormat.format(scheduledDepartureTime)}';
   }
 }
 
@@ -72,6 +71,7 @@ enum TrainState {
   Early,
   AllAboard,
   Canceled,
+  Unknown,
 }
 
 // A live train status from departure vision.
@@ -90,49 +90,13 @@ class TrainStatus {
 
   TrainStatus(this.stop, this.rawStatus, this.state, this.calculatedDepartureTime, this.lastUpdated);
 
-  static final DateFormat _timeDisplayFormat = new DateFormat.jm();
   @override
   String toString() {
     var rawStatusStr = (rawStatus.isEmpty) ? '' : '$rawStatus, ';
-    var status = statusForDisplay();
     return 
       'Status for ${stop.train.trainNo} to ${stop.train.destinationStation} ' + 
-      '${status[0]}: ${status[1]} ' +
-      '(${rawStatusStr}updated ${_timeDisplayFormat.format(lastUpdated)})';
-  }
-
-  String _minutesStr(int minutes) {
-    if (minutes == 0) return 'on time';
-    var minStr = (minutes.abs() == 1) ? 'minute' : 'minutes';
-    var lateStr = (minutes > 0) ? 'late' : 'early!';
-    return '$minutes $minStr $lateStr';
-  }
-
-  // Returns two strings: The first is the actual time of departure (either scheduled or calculated). 
-  // The second is a status message (e.g. "6 minutes late" or "not yet posted").
-  List<String> statusForDisplay() {
-    switch (state) {
-      case TrainState.NotPosted: 
-        return ['',
-                'not yet posted'];
-      case TrainState.OnTime:
-        return [_timeDisplayFormat.format(stop.scheduledDepartureTime),
-                'on time'];
-      case TrainState.Late:
-      case TrainState.Early: {
-        var calculatedDepartureDiff = calculatedDepartureTime.difference(stop.scheduledDepartureTime).inMinutes;
-        return ['now at ${_timeDisplayFormat.format(calculatedDepartureTime)}',
-                _minutesStr(calculatedDepartureDiff)];
-      }
-      case TrainState.AllAboard: {
-        var allAboardDiff = DateTime.now().difference(stop.scheduledDepartureTime).inMinutes;
-        return ['ALL ABOARD',
-                _minutesStr(allAboardDiff)];
-      }
-      case TrainState.Canceled: 
-        return ['CANCELED', ''];
-    }
-    return [rawStatus, '(unknown status)'];
+      '${DisplayUtils.shortStatus(this)}: ${DisplayUtils.timeStatus(this)} ' +
+      '(${rawStatusStr}updated ${DisplayUtils.timeDisplayFormat.format(lastUpdated)})';
   }
 
   // Return the best known departure time for this train, meaning the scheduled time if no

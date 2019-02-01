@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'display_utils.dart';
 import 'model.dart';
 
 class ChooChooNotifications {
@@ -37,21 +38,9 @@ class ChooChooNotifications {
   }
 
   void trainStatusNotification(TrainStatus status) {
-    var statusStrs = status.statusForDisplay();
-    switch (status.state) {
-      case TrainState.Late: {
-        _showNotification(
-          'Train #${status.stop.train.trainNo} is late!',
-          'Train #${status.stop.train.trainNo} from ${status.stop.departureStation.stationName} ' +
-          'is ${statusStrs[1]}. Scheduled at ${status.stop.scheduledDepartureTime}. ${statusStrs[0]}.',
-          status.stop.id());
-        break;
-      }
-      default: {
-        _showNotification(
-          'Train #${status.stop.train.trainNo}: ${statusStrs[0]}', 
-          statusStrs[1], status.stop.id());
-      }
-    }
+    _showNotification(
+      'Train #${status.stop.train.trainNo}: ${DisplayUtils.shortStatus(status)}',
+      DisplayUtils.timeStatus(status),
+      status.stop.id());
   }
 }
