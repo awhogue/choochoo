@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'file_utils.dart';
 import 'model.dart';
+import 'scheduler.dart';
 
 class Datastore {
   /* **************************************************************** */
@@ -26,8 +27,8 @@ class Datastore {
   static final Map<int, Train> trainByTripId = new Map();
   static final Map<String, int> trainNoToTripId = new Map();
 
-  // Index of stops on tripId|fromStationId, loaded from the data files.
-  static final Map<String, Stop> _stopByTripId = Map();
+  // Index of stops on stop.id(), loaded from the data files.
+  static final Map<int, Stop> _stopByTripId = Map();
 
   static Train trainFromTrainNo(String trainNo) {
     if (!trainNoToTripId.containsKey(trainNo)) {
@@ -52,7 +53,7 @@ class Datastore {
 
   // The current set of statuses, keyed on Station.stationName. Each value
   // is a map from Stop.id() to a status.
-  static final Map<String, Map<String, TrainStatus>> statuses = Map();
+  static final Map<String, Map<int, TrainStatus>> statuses = Map();
   
   // The list of statuses in chronological order for the given station.
   static List<TrainStatus> statusesInOrder(Station station) {
@@ -73,13 +74,23 @@ class Datastore {
     return all;
   }
 
+  // Return the current status for the given stop, or null if we don't have one.
+  static TrainStatus currentStatusForStop(Stop stop) {
+    var stationName = stop.departureStation.stationName;
+    if (statuses.containsKey(stationName) && 
+        statuses[stationName].containsKey(stop.id())) {
+      return statuses[stationName][stop.id()];
+    }
+    return null;
+  }
+
   // *******************************************************************
   // User preferences data, including stops the user wants to be 
   // notified about.
   // *******************************************************************
 
   // Stops the user is watching, keyed on Stop.id()
-  static final Map<String, WatchedStop> watchedStops = Map();
+  static final Map<int, WatchedStop> watchedStops = Map();
 
   // *******************************************************************
   // Initialization functions to load data.
@@ -111,8 +122,8 @@ class Datastore {
   static const _defaultMaxCacheAgeInMinutes = 5;
   static Future refreshStatuses(Station station, 
                                 AssetBundle bundle,
-                                [ bool readCache = false,
-                                  bool writeCache = false,
+                                [ bool readCache = true,
+                                  bool writeCache = true,
                                   int maxCacheAgeInMinutes = _defaultMaxCacheAgeInMinutes ]) async {
     await loadDataFiles(bundle);
     print('Refreshing statuses...');
@@ -135,6 +146,7 @@ class Datastore {
 
   static Future addWatchedStop(WatchedStop ws) async {
     watchedStops[ws.stop.id()] = ws;
+    await ChooChooScheduler.registerWatchedStop(ws);
     await _saveWatchedStops();
   }
 
@@ -204,6 +216,7 @@ class Datastore {
   }
 
   static bool _isCacheFileFresh(File cacheFile, int maxCacheAgeInMinutes) {
+    if (!cacheFile.existsSync()) return false;
     return (DateTime.now().difference(cacheFile.lastModifiedSync()).inMinutes < maxCacheAgeInMinutes);
   }
   // Try to read the cache file for the given station. Returns null if the 
@@ -232,6 +245,7 @@ class Datastore {
     File cacheFile = await FileUtils.getCacheFile(station.stationName);
     if (_isCacheFileFresh(cacheFile, maxCacheAgeInMinutes)) {
       print('Existing cache is still fresh, no need to overwrite.');
+      return;
     }
     print('Writing cache for ${station.stationName} to $cacheFile');
     if (cacheFile.existsSync()) {
@@ -316,7 +330,7 @@ class Datastore {
   // Parse a departurevision HTML file.
   static Future _parseDepartureVision(String html, Station station, AssetBundle bundle, bool useCache, int maxCacheAgeInMinutes) async {
     var statusesFound = 0;
-    statuses.putIfAbsent(station.stationName, () => Map<String, TrainStatus>());
+    statuses.putIfAbsent(station.stationName, () => Map<int, TrainStatus>());
 
     var document = parse(html);
     var lastUpdated = _parseLastUpdatedTime(document);

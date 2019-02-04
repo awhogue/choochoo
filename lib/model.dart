@@ -48,12 +48,15 @@ class Stop {
   Stop(this.train, this.departureStation, this.scheduledDepartureTime);
 
   // A unique identifier for this Stop using train.tripId and departureStation.stopId.
-  String id() {
+  // Assumes that the NJ transit tripIds are always less than 1000000.
+  int id() {
     return idFromRaw(train.tripId, departureStation.stopId);
   }
-
-  static String idFromRaw(int tripId, int departureStationId) {
-    return '$tripId|$departureStationId';
+  static int idFromRaw(int tripId, int departureStationId) {
+    // Pad the tripId to 7 digits, then prepend the departure station to make a unique, 
+    // hopefully stable int ID.
+    var paddedTripId = tripId.toString().padLeft(7, '0');
+    return int.parse('$departureStationId$paddedTripId');
   }
 
   @override
@@ -61,6 +64,28 @@ class Stop {
     return 
       '$train from $departureStation ' +
       'at ${DisplayUtils.timeDisplayFormat.format(scheduledDepartureTime)}';
+  }
+
+  // Return the date and time of the next scheduled departure for this train.
+  DateTime nextScheduledDeparture() {
+    var now = DateTime.now();
+    var next = new DateTime(
+      now.year, now.month, now.day, 
+      scheduledDepartureTime.hour, scheduledDepartureTime.minute);
+
+    // The train already departed today.
+    if (now.isAfter(next)) {
+      next = next.add(Duration(days: 1));
+    }
+
+    // TODO: handle non-weekday trains (and holidays!) using calendar_dates.txt
+    if (next.weekday == DateTime.saturday) {
+      next = next.add(Duration(days: 2));
+    } else if (next.weekday == DateTime.sunday) {
+      next = next.add(Duration(days: 1));
+    }
+
+    return next;
   }
 }
 

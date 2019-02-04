@@ -41,6 +41,6 @@ class ChooChooNotifications {
     _showNotification(
       'Train #${status.stop.train.trainNo}: ${DisplayUtils.shortStatus(status)}',
       DisplayUtils.timeStatus(status),
-      status.stop.id());
+      status.stop.id().toString());
   }
 }

@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
-import 'train_status_card.dart';
+import 'datastore.dart';
 import 'file_utils.dart';
 import 'model.dart';
-import 'datastore.dart';
 import 'notifications.dart';
+import 'scheduler.dart';
+import 'train_status_card.dart';
 
-void main() => runApp(MyApp());
+void main() async {
+  await ChooChooScheduler.appInitialize();
+  runApp(ChooChooApp());
+}
 
-class MyApp extends StatelessWidget {
+class ChooChooApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -29,7 +33,7 @@ class ChooChooHome extends StatefulWidget {
 }
 
 class _ChooChooHomeState extends State<ChooChooHome> {
-  static const _testMode = true;
+  static const _testMode = false;
 
   ChooChooNotifications _notifications;
   
@@ -38,6 +42,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
   } 
 
   Future _loadData() async {
+    ChooChooScheduler.stateInitialize(_notifications, DefaultAssetBundle.of(context));
     await Datastore.loadDataFiles(DefaultAssetBundle.of(context));
     await Datastore.loadWatchedStops();
     return await _getTrainStatuses();
@@ -45,36 +50,34 @@ class _ChooChooHomeState extends State<ChooChooHome> {
 
   Future _getTrainStatuses() async {
     var bundle = DefaultAssetBundle.of(context);
+    var hhkStation = Datastore.stationByStationName['HOHOKUS'];
     if (_testMode) {
       print('TEST MODE');
       Datastore.clearWatchedStops();
-      var watchedStation = Datastore.stationByStationName['HOHOKUS'];
-      var filename = FileUtils.normalizeForFilename(watchedStation.stationName);
+      var filename = FileUtils.normalizeForFilename(hhkStation.stationName);
       var cacheHtml = await FileUtils.loadFile('dv_cache/$filename.htm', bundle);
       print('Got ${cacheHtml.length} bytes of cached data from $filename');
-      var cacheFile = await FileUtils.getCacheFile(watchedStation.stationName);
+      var cacheFile = await FileUtils.getCacheFile(hhkStation.stationName);
       cacheFile.writeAsStringSync(cacheHtml);
       await Datastore.refreshStatuses(
-        watchedStation, DefaultAssetBundle.of(context), 
+        hhkStation, DefaultAssetBundle.of(context), 
         true, false, 10000000);
 
       // For testing, just watch the next arrival.
-      var nextDeparture = Datastore.statusesInOrder(watchedStation)[0];
+      var nextDeparture = Datastore.statusesInOrder(hhkStation)[0];
       print('Watching $nextDeparture for testing');
       Datastore.addWatchedStop(WatchedStop(nextDeparture.stop, WatchedStop.weekdays));
     } else {
+      // TODO: Let user add these instead.
       await _setUpDummyWatchedStops();
-      var watchedStations = Datastore.watchedStops.values.map((ws) => ws.stop.departureStation).toList();
-      for (var watchedStation in watchedStations) {
-        await Datastore.refreshStatuses(
-          watchedStation, DefaultAssetBundle.of(context), 
-          true, true, 1);
-      }
+      await Datastore.refreshStatuses(hhkStation, DefaultAssetBundle.of(context));
+
     }
     return true;
   }
 
   Future _setUpDummyWatchedStops() async {
+    Datastore.clearWatchedStops();
     // 8:03am from HOHOKUS
     await Datastore.addWatchedStop(
       WatchedStop(Datastore.stopByTripId(1162, Datastore.stationByStationName['HOHOKUS'].stopId),
@@ -122,14 +125,15 @@ class _ChooChooHomeState extends State<ChooChooHome> {
                 print('data is null');
                 return Center(child: Text('Set up some trains to watch!'));
               } else {
-                List<TrainStatus> validStatuses = _watchedTrainStatuses();
-                print('Working with ${validStatuses.length} valid statuses');
-                if (validStatuses.isNotEmpty) {
-                  _notifications.trainStatusNotification(validStatuses[0]);
+                if (_testMode) {
+                  List<TrainStatus> validStatuses = _watchedTrainStatuses();
+                  if (validStatuses.isNotEmpty) {
+                    _notifications.trainStatusNotification(validStatuses[0]);
+                  }
                 }
-                
+
                 return ListView(
-                  children: validStatuses.map((ts) => TrainStatusCard(ts)).toList(),
+                  children: Datastore.statusesInOrder(Datastore.stationByStationName['HOHOKUS']).map((ts) => TrainStatusCard(ts)).toList(),
                 );
               }
             }
