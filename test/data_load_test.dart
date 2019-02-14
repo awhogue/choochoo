@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:test/test.dart';
+import 'package:choochoo/config.dart';
 import 'package:choochoo/datastore.dart';
 import 'package:choochoo/model.dart';
 
@@ -17,6 +18,9 @@ void main() async {
   final directory = 'assets/njtransit';
   
   setUpAll(() async {
+    Config.setBundle(bundle);
+    Config.setUnitTestConfig();
+    
     const MethodChannel('plugins.flutter.io/path_provider')
       .setMockMethodCallHandler((MethodCall methodCall) async {
       // If we're getting the apps documents directory, return the path to the
@@ -29,23 +33,23 @@ void main() async {
   });
 
   test('Test Data Load', () async {
-    await Datastore.loadDataFiles(bundle);
-    print(Datastore.stopByTrainNo('1883', Datastore.stationByStationName['HOHOKUS'].stopId));
+    await Datastore.loadDataFiles();
+    print(Datastore.stopByTrainNo('1883', Config.hhkStation().stopId));
   });
 
   test('Test DepartureVision', () async {
-    await Datastore.loadDataFiles(bundle);
-    var station = Datastore.stationByStationName['HOHOKUS'];
-    await Datastore.refreshStatuses(station, bundle, true, false, 1000000000);
+    await Datastore.loadDataFiles();
+    var station = Config.hhkStation();
+    await Datastore.refreshStatuses(station);
     for (var status in Datastore.statusesInOrder(station)) {
       print(status);
     }
   });
 
   test('Test save and load WatchedStops', () async {
-    await Datastore.loadDataFiles(bundle);
+    await Datastore.loadDataFiles();
     WatchedStop ws = WatchedStop(
-      Datastore.stopByTrainNo('1156', Datastore.stationByStationName['HOHOKUS'].stopId),
+      Datastore.stopByTrainNo('1156', Config.hhkStation().stopId),
       WatchedStop.weekdays);
 
     String json = Datastore.watchedStopsToJson([ws]);

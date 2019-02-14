@@ -7,11 +7,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:html/parser.dart';
 import 'package:html/dom.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'config.dart';
 import 'file_utils.dart';
 import 'model.dart';
 import 'scheduler.dart';
@@ -100,7 +100,7 @@ class Datastore {
   //   loadWatchedStops() / addWatchedStop() – load/add a stop the user wants to watch.
   // *******************************************************************
   static bool _dataFilesLoaded = false;
-  static Future loadDataFiles(AssetBundle bundle) async {
+  static Future loadDataFiles() async {
     if (_dataFilesLoaded) {
       print('loadDataFiles(): already loaded (${stationByStationName.length} stations, ' +
             '${trainByTripId.length} Trains, ${_stopByTripId.length} Stops)');
@@ -108,9 +108,9 @@ class Datastore {
     }
     print('Loading datafiles...');
     var start = DateTime.now();
-    await _loadStations(bundle);
-    await _loadTrains(bundle);
-    await _loadStops(bundle);
+    await _loadStations();
+    await _loadTrains();
+    await _loadStops();
     
     var timing = DateTime.now().difference(start).inMilliseconds;
     print('Loaded data files in ${timing}ms.');
@@ -119,17 +119,12 @@ class Datastore {
 
   // Refresh the list of statuses for the given station, either directly from
   // the DepartureVision site, or using the cache (if available and fresh). 
-  static const _defaultMaxCacheAgeInMinutes = 5;
-  static Future refreshStatuses(Station station, 
-                                AssetBundle bundle,
-                                [ bool readCache = true,
-                                  bool writeCache = true,
-                                  int maxCacheAgeInMinutes = _defaultMaxCacheAgeInMinutes ]) async {
-    await loadDataFiles(bundle);
+  static Future refreshStatuses(Station station) async {
+    await loadDataFiles();
     print('Refreshing statuses...');
     var start = DateTime.now();
-    String html = await _fetchDepartureVision(station, readCache, maxCacheAgeInMinutes);
-    await _parseDepartureVision(html, station, bundle, writeCache, maxCacheAgeInMinutes);
+    String html = await _fetchDepartureVision(station);
+    await _parseDepartureVision(html, station);
 
     var timing = DateTime.now().difference(start).inMilliseconds;
     print('Loaded statuses in ${timing}ms.');
@@ -145,6 +140,10 @@ class Datastore {
   }
 
   static Future addWatchedStop(WatchedStop ws) async {
+    if (watchedStops.containsKey(ws.stop.id())) {
+      print('Already watching ws');
+      return;
+    }
     watchedStops[ws.stop.id()] = ws;
     await ChooChooScheduler.registerWatchedStop(ws);
     await _saveWatchedStops();
@@ -160,16 +159,16 @@ class Datastore {
   // Internal functions.
   // *******************************************************************
 
-  static Future _loadStations(AssetBundle bundle) async {
+  static Future _loadStations() async {
     // TODO: probably want to have some sort of real lock while loading data so we don't
     // have two concurrent processes loading at the same time. Also, just checking for 
     // non-empty probably isn't enough to validate that the data loaded correctly.
     Map<String, String> stationToChar = new Map();
-    for (var row in await FileUtils.csvFileToArray('station2char.csv', bundle)) {
+    for (var row in await FileUtils.csvFileToArray('station2char.csv')) {
       stationToChar[row[0]] = row[1].toString().trim();
     }
 
-    for (var row in await FileUtils.csvFileToArray('stops.txt', bundle)) {
+    for (var row in await FileUtils.csvFileToArray('stops.txt')) {
       if (row[0] == 'stop_id') continue;  // Skip header.
       int stopId = row[0];
       String stationName = row[2];
@@ -185,10 +184,10 @@ class Datastore {
   static String _fixTrainNo(String rawTrainNo) {
     return rawTrainNo.replaceFirst(_removeLeadingZeros, '');
   }
-  static Future _loadTrains(AssetBundle bundle) async {
+  static Future _loadTrains() async {
     // TODO: distinguish by service_id for the current date (weekend vs. weekday). Need to join
     // with the calendar_dates.txt file?
-    for (var row in await FileUtils.csvFileToArray('trips.txt', bundle)) {
+    for (var row in await FileUtils.csvFileToArray('trips.txt')) {
       if (row[0] == 'route_id') continue;  // Skip header.
       int tripId = row[2];
       String trainNo = _fixTrainNo(row[5]);
@@ -200,8 +199,8 @@ class Datastore {
   }
 
   static final DateFormat _hourMinuteSecondsFormat = new DateFormat.Hms();
-  static Future _loadStops(AssetBundle bundle) async {    
-    for (var row in await FileUtils.csvFileToArray('stop_times.txt', bundle)) {
+  static Future _loadStops() async {    
+    for (var row in await FileUtils.csvFileToArray('stop_times.txt')) {
       if (row[0] == 'trip_id') continue;  // Skip header.
       var tripId = row[0];
       var departureStationId = row[3];
@@ -215,16 +214,16 @@ class Datastore {
     return _stopByTripId;
   }
 
-  static bool _isCacheFileFresh(File cacheFile, int maxCacheAgeInMinutes) {
+  static bool _isCacheFileFresh(File cacheFile) {
     if (!cacheFile.existsSync()) return false;
-    return (DateTime.now().difference(cacheFile.lastModifiedSync()).inMinutes < maxCacheAgeInMinutes);
+    return (DateTime.now().difference(cacheFile.lastModifiedSync()) < Config.maxCacheAge);
   }
   // Try to read the cache file for the given station. Returns null if the 
   // cache file is out of date or nonexistant.
-  static Future<String> _tryReadCacheFile(Station station, int maxCacheAgeInMinutes) async {
+  static Future<String> _tryReadCacheFile(Station station) async {
     File cacheFile = await FileUtils.getCacheFile(station.stationName);
     if (cacheFile.existsSync()) {
-      if (_isCacheFileFresh(cacheFile, maxCacheAgeInMinutes)) {
+      if (_isCacheFileFresh(cacheFile)) {
         print('Cache file $cacheFile is fresh. Using it.');
         String html = cacheFile.readAsStringSync();
         print('Read ${html.length} bytes from $cacheFile');
@@ -241,9 +240,9 @@ class Datastore {
   }
 
   // Write the given html to the station's cache file.
-  static Future _tryWriteCacheFile(Station station, String html, int maxCacheAgeInMinutes) async {
+  static Future _tryWriteCacheFile(Station station, String html) async {
     File cacheFile = await FileUtils.getCacheFile(station.stationName);
-    if (_isCacheFileFresh(cacheFile, maxCacheAgeInMinutes)) {
+    if (_isCacheFileFresh(cacheFile)) {
       print('Existing cache is still fresh, no need to overwrite.');
       return;
     }
@@ -258,8 +257,8 @@ class Datastore {
 
   // Fetch html from the DepartureVision site, or potentially the cache.
   // Disable the cache by setting maxCacheAge to 0 or negative.
-  static Future<String> _fetchDepartureVision(Station station, bool useCache, int maxCacheAgeInMinutes) async {
-    String cached = (useCache) ? await _tryReadCacheFile(station, maxCacheAgeInMinutes) : null;
+  static Future<String> _fetchDepartureVision(Station station) async {
+    String cached = (Config.readCache) ? await _tryReadCacheFile(station) : null;
     if (null != cached) {
       return cached;
     }
@@ -328,7 +327,7 @@ class Datastore {
     }
   }
   // Parse a departurevision HTML file.
-  static Future _parseDepartureVision(String html, Station station, AssetBundle bundle, bool useCache, int maxCacheAgeInMinutes) async {
+  static Future _parseDepartureVision(String html, Station station) async {
     var statusesFound = 0;
     statuses.putIfAbsent(station.stationName, () => Map<int, TrainStatus>());
 
@@ -356,8 +355,8 @@ class Datastore {
 
     print('Found $statusesFound statuses');
 
-    if (useCache && statusesFound > 0) {
-      _tryWriteCacheFile(station, html, maxCacheAgeInMinutes);
+    if (Config.writeCache && statusesFound > 0) {
+      _tryWriteCacheFile(station, html);
     }
   }
 

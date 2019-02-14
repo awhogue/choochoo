@@ -38,6 +38,7 @@ class ChooChooNotifications {
   }
 
   void trainStatusNotification(TrainStatus status) {
+    print('trainStatusNotification($status)');
     _showNotification(
       'Train #${status.stop.train.trainNo}: ${DisplayUtils.shortStatus(status)}',
       DisplayUtils.timeStatus(status),

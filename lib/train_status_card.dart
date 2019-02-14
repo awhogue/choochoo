@@ -25,15 +25,34 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Train #${status.stop.train.trainNo}',
-            style: Theme.of(context).textTheme.title,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Train #${status.stop.train.trainNo}',
+                  style: Theme.of(context).textTheme.title,
+                )
+              ),
+              Text(
+                DisplayUtils.timeString(status.stop.scheduledDepartureTime),
+                style: Theme.of(context).textTheme.title,
+              )
+            ]
           ),
-          Text(
-            DisplayUtils.shortStatus(status),
-            style: Theme.of(context).textTheme.title,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  DisplayUtils.shortStatus(status),
+                  style: Theme.of(context).textTheme.title,
+                ),
+              ),
+              Text(
+                DisplayUtils.timeStatus(status),
+                style: Theme.of(context).textTheme.title,
+              ),
+            ],
           ),
-          Text(DisplayUtils.timeStatus(status)),
         ],
       ),
     );

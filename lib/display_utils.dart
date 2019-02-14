@@ -24,7 +24,7 @@ class DisplayUtils {
       case TrainState.Late:
       case TrainState.Early: {
         var calculatedDepartureDiff = status.calculatedDepartureTime.difference(status.stop.scheduledDepartureTime).inMinutes;
-        return '${_statusMinutesStr(calculatedDepartureDiff)}, now at ${timeDisplayFormat.format(status.calculatedDepartureTime)}';
+        return _statusMinutesStr(calculatedDepartureDiff);
       }
       case TrainState.AllAboard:
         return 'ALL ABOARD!';
@@ -42,16 +42,18 @@ class DisplayUtils {
       case TrainState.Late:
       case TrainState.Early:
         return 
-          'now at ${timeDisplayFormat.format(status.calculatedDepartureTime)} ' +
-          '(was ${timeDisplayFormat.format(status.stop.scheduledDepartureTime)})';
+          'now at ${timeString(status.calculatedDepartureTime)}';
       case TrainState.Canceled:
-        return '(was ${timeDisplayFormat.format(status.stop.scheduledDepartureTime)})';
       case TrainState.NotPosted:
       case TrainState.OnTime:
       case TrainState.AllAboard:
       case TrainState.Unknown:
       default:
-        return 'scheduled at ${timeDisplayFormat.format(status.stop.scheduledDepartureTime)}';
+        return '---';
     }
+  }
+
+  static String timeString(DateTime time) {
+    return timeDisplayFormat.format(time);
   }
 }
