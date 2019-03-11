@@ -54,11 +54,10 @@ class _ChooChooHomeState extends State<ChooChooHome> {
     if (Config.debug()) {
       await Datastore.clearWatchedStops();
       if (Config.forceScheduledNotification) {
-        WatchedStop ws = Config.setupFakes(
-                            DateTime.now().add(Duration(minutes: 10)),
-                            DateTime.now().add(Duration(minutes: 15)),
-                            TrainState.Late);
-        await ChooChooScheduler.registerWatchedStop(ws);
+        Config.setupFakes(
+          DateTime.now().add(Duration(minutes: 10)),
+          DateTime.now().add(Duration(minutes: 15)),
+          TrainState.Late);
       } else if (Config.primeCacheFromTestData) {
         await FileUtils.primeCacheFromTestData();
         await Datastore.refreshStatuses(Config.hhkStation());
