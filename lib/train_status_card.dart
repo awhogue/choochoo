@@ -29,7 +29,7 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
             children: [
               Expanded(
                 child: Text(
-                  'Train #${status.stop.train.trainNo}',
+                  'Train #${status.stop.train.trainNo} to ${status.stop.train.destinationStation.stationName}',
                   style: Theme.of(context).textTheme.title,
                 )
               ),
