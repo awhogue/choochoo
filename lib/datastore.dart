@@ -333,7 +333,8 @@ class Datastore {
       var calculatedDeparture = lastUpdated.add(new Duration(minutes: minutesDelayed));
       var diff = calculatedDeparture.difference(stop.scheduledDepartureTime).inMinutes;
       var state = () {
-        if (diff == 0) return TrainState.OnTime;
+        // Trains within a minute of departure are considered "on time".
+        if (diff <= 1) return TrainState.OnTime;
         else if (diff > 0) return TrainState.Late;
         else return TrainState.Early;
       }();
