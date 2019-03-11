@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'config.dart';
 import 'datastore.dart';
@@ -52,17 +53,15 @@ class _ChooChooHomeState extends State<ChooChooHome> {
     await Datastore.loadDataFiles();
     if (Config.debug()) {
       await Datastore.clearWatchedStops();
-      if (Config.primeCacheFromTestData) {
+      if (Config.forceScheduledNotification) {
+        WatchedStop ws = Config.setupFakes(
+                            DateTime.now().add(Duration(minutes: 10)),
+                            DateTime.now().add(Duration(minutes: 15)),
+                            TrainState.Late);
+        await ChooChooScheduler.registerWatchedStop(ws);
+      } else if (Config.primeCacheFromTestData) {
         await FileUtils.primeCacheFromTestData();
-      }
-      await Datastore.refreshStatuses(Config.hhkStation());
-
-      if (Datastore.statuses.isEmpty) {
-        print('Did not find any statuses to watch for debugging');
-      } else {
-        var nextDeparture = Datastore.statusesInOrder(Config.hhkStation())[0];
-        print('Watching $nextDeparture for testing');
-        await Datastore.addWatchedStop(WatchedStop(nextDeparture.stop, WatchedStop.weekdays));
+        await Datastore.refreshStatuses(Config.hhkStation());
       }
     } else {
       await Datastore.loadWatchedStops();
@@ -76,7 +75,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
   Future _addMyTrains() async {
     await Datastore.addWatchedStop(
       WatchedStop(Datastore.stopByTripId(Config.id803am, Config.hhkStation().stopId),
-                  WatchedStop.weekdays)
+                  Stop.weekdays)
     );
   }
 
@@ -85,7 +84,6 @@ class _ChooChooHomeState extends State<ChooChooHome> {
     print('watchedStops: ${Datastore.watchedStops}');
     List<TrainStatus> statuses = List<TrainStatus>();
     for (var status in Datastore.allStatuses()) {
-      print('Considering $status');
       if (Datastore.watchedStops.containsKey(status.stop.id())) {
         statuses.add(status);
       }
@@ -122,6 +120,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
               } else {
                 if (Config.debug()) {
                   List<TrainStatus> validStatuses = _watchedTrainStatuses();
+                  print('Found ${validStatuses.length} validStatuses');
                   if (Config.forceNotificationOnStartup && validStatuses.isNotEmpty) {
                     _notifications.trainStatusNotification(validStatuses[0]);
                   }

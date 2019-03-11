@@ -11,7 +11,8 @@ class ChooChooScheduler {
   static ChooChooNotifications _notifications;
 
   static appInitialize() async {
-     await AndroidAlarmManager.initialize();
+    print('ChooChooScheduler.appInitialize()');
+    await AndroidAlarmManager.initialize();
   }
 
   static stateInitialize(ChooChooNotifications notifications) {
@@ -19,15 +20,23 @@ class ChooChooScheduler {
   }
 
   // Register the callbacks for the given WatchedStop.
-  static registerWatchedStop(WatchedStop stop) async {
-    var delay = stop.stop.nextScheduledDeparture().difference(DateTime.now());
+  static registerWatchedStop(WatchedStop ws) async {
+    print('registerWatchedStop($ws)');
+    print('ws.stop.nextScheduledDeparture: ${ws.stop.nextScheduledDeparture()}');
+    print('now:                            ${DateTime.now()}');
+    var delay = ws.stop.nextScheduledDeparture().difference(DateTime.now());
+    print('Initial delay: $delay');
     if (delay > Config.startCheckingDV) {
       delay = delay - Config.startCheckingDV;
+      print('Shortened delay: $delay');
     } else {
-      delay = new Duration(seconds: 1);
+      delay = new Duration(seconds: 5);
+      print('Already inside time to start checking DV. Delay: $delay');
     }
-    AndroidAlarmManager.oneShot(delay, stop.stop.id(), () => _checkStop(stop));
-    print('Registered timer in $delay (${DateTime.now().add(delay)}) for $stop');
+
+    print('oneShot($delay)');
+    await AndroidAlarmManager.oneShot(delay, ws.stop.id(), () => _checkStop(ws));
+    print('Registered timer in $delay (${DateTime.now().add(delay)}) for $ws');
   }
 
   static _checkStop(WatchedStop stop) async {

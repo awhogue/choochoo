@@ -44,8 +44,14 @@ class Stop {
   final Station departureStation;
   // The scheduled time of departure for this train.
   final DateTime scheduledDepartureTime;
+  // What days of the week the train runs. Defaults to every day until...
+  // TODO: load handle non-weekday trains (and holidays!) using calendar_dates.txt
+  final List<int> serviceDays;
+  static const List<int> weekdays = [DateTime.monday, DateTime.tuesday, DateTime.wednesday, DateTime.thursday, DateTime.friday];
+  static const List<int> weekends = [DateTime.saturday, DateTime.sunday];
+  static const List<int> everyday = [DateTime.sunday, DateTime.monday, DateTime.tuesday, DateTime.wednesday, DateTime.thursday, DateTime.friday, DateTime.saturday];
 
-  Stop(this.train, this.departureStation, this.scheduledDepartureTime);
+  Stop(this.train, this.departureStation, this.scheduledDepartureTime, this.serviceDays);
 
   // A unique identifier for this Stop using train.tripId and departureStation.stopId.
   // Assumes that the NJ transit tripIds are always less than 1000000.
@@ -69,23 +75,20 @@ class Stop {
   // Return the date and time of the next scheduled departure for this train.
   DateTime nextScheduledDeparture() {
     var now = DateTime.now();
-    var next = new DateTime(
+    var departureToday = new DateTime(
       now.year, now.month, now.day, 
       scheduledDepartureTime.hour, scheduledDepartureTime.minute);
+    print('now:         $now');
+    print('departToday: $departureToday');
 
-    // The train already departed today.
-    if (now.isAfter(next)) {
-      next = next.add(Duration(days: 1));
+    if (now.isBefore(departureToday) && 
+        this.serviceDays.contains(departureToday.weekday)) {
+      return departureToday;
+    } else {
+      // For now, just go to tomorrow's departure.
+      // TODO: calculate the correct next day that has a departure (e.g. if it's the weekend)
+      return departureToday.add(Duration(days: 1));
     }
-
-    // TODO: handle non-weekday trains (and holidays!) using calendar_dates.txt
-    if (next.weekday == DateTime.saturday) {
-      next = next.add(Duration(days: 2));
-    } else if (next.weekday == DateTime.sunday) {
-      next = next.add(Duration(days: 1));
-    }
-
-    return next;
   }
 }
 
@@ -139,9 +142,8 @@ class TrainStatus {
 class WatchedStop {
   Stop stop;
   // The days of the week that the user cares about (list of DateTime.weekday ints).
+  // Can use the constants defined in Stop.
   List<int> days;
-  static const List<int> weekdays = [DateTime.monday, DateTime.tuesday, DateTime.wednesday, DateTime.thursday, DateTime.friday];
-  static const List<int> weekends = [DateTime.saturday, DateTime.sunday];
 
   WatchedStop(this.stop, this.days);
 

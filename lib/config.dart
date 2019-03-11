@@ -14,6 +14,7 @@
 
 import 'package:flutter/services.dart';
 import 'datastore.dart';
+import 'model.dart';
 
 enum Mode {
   PROD,
@@ -50,14 +51,32 @@ class Config {
   static bool forceScheduledNotification = false;
 
   ///////////// Assets /////////////
+
   // The asset bundle we're using for this instantiation.
   static AssetBundle bundle;
   static setBundle(AssetBundle b) => bundle = b;
 
+  ///////////// Testing /////////////
+
   // A few datastore constants that are useful for testing.
   static final String _hhk = 'HOHOKUS';  // Ho-Ho-Kus station name.
+  static final String _hob = 'HOBOKEN';  // Hoboken station name.
   static hhkStation() => Datastore.stationByStationName[_hhk];  // Assumes data has been loaded.
+  static hobStation() => Datastore.stationByStationName[_hob];  // Assumes data has been loaded.
   static final int id803am = 1162;      // tripId for the 8:03am from Ho-Ho-Kus to Hoboken.
+
+  // Fake a WatchedStop and Status for testing.
+  static WatchedStop setupFakes(DateTime departureTime, DateTime calculatedDepartureTime, TrainState state) {    
+    Train train = Train('999999', Config.hobStation(), 999999);
+    Stop stop = Stop(train, Config.hhkStation(), departureTime, Stop.everyday);
+    WatchedStop watchedStop = WatchedStop(stop, [DateTime.now().weekday]);
+    TrainStatus status = TrainStatus(stop, "FAKE STOP", state, calculatedDepartureTime, DateTime.now());
+    Datastore.addTrain(train);
+    Datastore.addStop(stop);
+    Datastore.addWatchedStop(watchedStop);
+    Datastore.addStatus(status);
+    return watchedStop;
+  }
 
   // Configuration for unit tests.
   static setUnitTestConfig() {
@@ -85,7 +104,7 @@ class Config {
     return [
       'CONFIG:', 
       'mode:   $mode', 
-      'Cache:  read: $readCache, write: $writeCache, maxAge: $maxCacheAge, prime: $primeCacheFromTestData',
+      'Cache:  read: $readCache, write: $writeCache, maxAge: $maxCacheAge, testData: $primeCacheFromTestData',
       'DV:     start: $startCheckingDV, recheck interval: $recheckDV',
       'Notifs: forceOnStartup: $forceNotificationOnStartup, forceScheduled: $forceScheduledNotification',
     ].join('\n  ');

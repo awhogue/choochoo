@@ -1,5 +1,6 @@
 // Manage sending notifications to the user when a watched train is updated.
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'display_utils.dart';

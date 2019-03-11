@@ -11,10 +11,12 @@ public class Application extends FlutterApplication implements PluginRegistrantC
   public void onCreate() {
     super.onCreate();
     AlarmService.setPluginRegistrant(this);
+    System.out.println("Application.onCreate()");
   }
 
   @Override
   public void registerWith(PluginRegistry registry) {
     GeneratedPluginRegistrant.registerWith(registry);
+    System.out.println("Application.registerWith()");
   }
 }

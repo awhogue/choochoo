@@ -30,6 +30,20 @@ class Datastore {
   // Index of stops on stop.id(), loaded from the data files.
   static final Map<int, Stop> _stopByTripId = Map();
 
+  static addStation(Station station) {
+    stationByStationName[station.stationName] = station;
+    stationByStopId[station.stopId] = station;
+  }
+
+  static addTrain(Train train) {
+    trainByTripId[train.tripId] = train;
+    trainNoToTripId[train.trainNo] = train.tripId;
+  }
+
+  static addStop(Stop stop) {
+    _stopByTripId[stop.id()] = stop;
+  }
+
   static Train trainFromTrainNo(String trainNo) {
     if (!trainNoToTripId.containsKey(trainNo)) {
       print('Unknmown trainNo: $trainNo');
@@ -54,6 +68,11 @@ class Datastore {
   // The current set of statuses, keyed on Station.stationName. Each value
   // is a map from Stop.id() to a status.
   static final Map<String, Map<int, TrainStatus>> statuses = Map();
+
+  static addStatus(TrainStatus status) {
+    statuses.putIfAbsent(status.stop.departureStation.stationName, () => Map());
+    statuses[status.stop.departureStation.stationName][status.stop.id()] = status;
+  }
   
   // The list of statuses in chronological order for the given station.
   static List<TrainStatus> statusesInOrder(Station station) {
@@ -139,13 +158,13 @@ class Datastore {
     print('Loaded ${watchedStops.length} watched stops:');
   }
 
-  static Future addWatchedStop(WatchedStop ws) async {
-    if (watchedStops.containsKey(ws.stop.id())) {
+  static Future addWatchedStop(WatchedStop watchedStop) async {
+    if (watchedStops.containsKey(watchedStop.stop.id())) {
       print('Already watching ws');
-      return;
+      return; 
     }
-    watchedStops[ws.stop.id()] = ws;
-    await ChooChooScheduler.registerWatchedStop(ws);
+    watchedStops[watchedStop.stop.id()] = watchedStop;
+    await ChooChooScheduler.registerWatchedStop(watchedStop);
     await _saveWatchedStops();
   }
 
@@ -172,9 +191,7 @@ class Datastore {
       if (row[0] == 'stop_id') continue;  // Skip header.
       int stopId = row[0];
       String stationName = row[2];
-      Station station = new Station(stationName, stationToChar[stationName], stopId);
-      stationByStationName[stationName] = station;
-      stationByStopId[stopId] = station;
+      addStation(new Station(stationName, stationToChar[stationName], stopId));
     }
 
     print('Loaded ${stationByStationName.length} stations from stops.txt');
@@ -191,8 +208,7 @@ class Datastore {
       if (row[0] == 'route_id') continue;  // Skip header.
       int tripId = row[2];
       String trainNo = _fixTrainNo(row[5]);
-      trainByTripId[tripId] = new Train(trainNo, stationByStationName[row[3]], tripId);
-      trainNoToTripId[trainNo] = tripId;
+      addTrain(new Train(trainNo, stationByStationName[row[3]], tripId));
     }
     print('Loaded ${trainByTripId.length} trains');
     return;
@@ -205,8 +221,12 @@ class Datastore {
       var tripId = row[0];
       var departureStationId = row[3];
       Train train = trainByTripId[tripId];
-      Stop stop = new Stop(train, stationByStopId[departureStationId], _hourMinuteSecondsFormat.parse(row[2]));
-      _stopByTripId[stop.id()] = stop;
+      Stop stop = Stop(
+        train, 
+        stationByStopId[departureStationId], 
+        _hourMinuteSecondsFormat.parse(row[2]),
+        Stop.everyday);
+      addStop(stop);
     }
 
     print('Loaded ${_stopByTripId.length} trains from stop_times.txt');    
@@ -348,7 +368,7 @@ class Datastore {
         print('Unable to parse status for train $trainNo from ${station.stationName} (stopId ${stop.id()}):');
         print('$rawStatus');
       } else {
-        statuses[station.stationName][status.stop.id()] = status;
+        addStatus(status);
         ++statusesFound;
       }
     }

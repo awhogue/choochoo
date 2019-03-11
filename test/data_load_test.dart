@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
@@ -50,7 +51,7 @@ void main() async {
     await Datastore.loadDataFiles();
     WatchedStop ws = WatchedStop(
       Datastore.stopByTrainNo('1156', Config.hhkStation().stopId),
-      WatchedStop.weekdays);
+      Stop.everyday);
 
     String json = Datastore.watchedStopsToJson([ws]);
     List<WatchedStop> watchedStops = Datastore.loadWatchedStopsFromJson(json);
