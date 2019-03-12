@@ -19,8 +19,23 @@ class ChooChooScheduler {
     _notifications = notifications;
   }
 
-  // Register the callbacks for the given WatchedStop.
-  static registerWatchedStop(WatchedStop ws) async {
+  static WatchedStop _nextDeparture() {
+    Datastore.loadWatchedStops();
+    List<WatchedStop> watchedStops = Datastore.watchedStops.values.toList();
+    print('_nextDeparture found ${watchedStops.length} stops');
+    if (watchedStops.isEmpty) return null;
+    watchedStops.sort((a, b) => a.stop.nextScheduledDeparture().compareTo(b.stop.nextScheduledDeparture()));
+    return watchedStops[0];
+  }
+
+  // Schedule the next time to wake up and check train status based on the current
+  // set of WatchedStops.
+  static updateScheduledNotifications() async {
+    if (Datastore.watchedStops.isEmpty) {
+      print('scheduleNextNotification(): no WatchedStops registered');
+      return;
+    }
+    WatchedStop ws =_nextDeparture();
     print('registerWatchedStop($ws)');
     print('ws.stop.nextScheduledDeparture: ${ws.stop.nextScheduledDeparture()}');
     print('now:                            ${DateTime.now()}');
@@ -35,14 +50,26 @@ class ChooChooScheduler {
     }
 
     print('oneShot($delay)');
-    await AndroidAlarmManager.oneShot(delay, ws.stop.id(), () => _checkStop(ws));
+    // TODO: unregister any existing callbacks we've already set up.
+    bool result = await AndroidAlarmManager.oneShot(
+      delay, 
+      ws.stop.id(), 
+      _checkWatchedStops,
+      exact: true,
+      wakeup: true
+    );
     print('Registered timer in $delay (${DateTime.now().add(delay)}) for $ws');
+    print('result: $result');
   }
 
-  static _checkStop(WatchedStop stop) async {
-    print('_checkStop($stop)');
-    await Datastore.refreshStatuses(stop.stop.departureStation);
-    var status = Datastore.currentStatusForStop(stop.stop);
+  static void _checkWatchedStops() async {
+    print('_checkWatchedStops()');
+    WatchedStop ws = _nextDeparture();
+    print('next departure: $ws');
+    if (null == ws) return;
+
+    await Datastore.refreshStatuses(ws.stop.departureStation);
+    var status = Datastore.currentStatusForStop(ws.stop);
 
     // This shouldn't be null since we just refreshed the statuses, and we should only
     // call _checkStop when there's a train upcoming.
@@ -51,7 +78,7 @@ class ChooChooScheduler {
     if (null != status) {
       _notifications.trainStatusNotification(status);
       if (status.calculatedDepartureTime.isAfter(DateTime.now())) {
-        AndroidAlarmManager.oneShot(Config.recheckDV, stop.stop.id(), _checkStop(stop));
+        AndroidAlarmManager.oneShot(Config.recheckDV, ws.stop.id(), _checkWatchedStops);
       }
     }
   }

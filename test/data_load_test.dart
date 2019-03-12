@@ -34,12 +34,12 @@ void main() async {
   });
 
   test('Test Data Load', () async {
-    await Datastore.loadDataFiles();
+    await Datastore.loadData();
     print(Datastore.stopByTrainNo('1883', Config.hhkStation().stopId));
   });
 
   test('Test DepartureVision', () async {
-    await Datastore.loadDataFiles();
+    await Datastore.loadData();
     var station = Config.hhkStation();
     await Datastore.refreshStatuses(station);
     for (var status in Datastore.statusesInOrder(station)) {
@@ -48,7 +48,7 @@ void main() async {
   });
 
   test('Test save and load WatchedStops', () async {
-    await Datastore.loadDataFiles();
+    await Datastore.loadData();
     WatchedStop ws = WatchedStop(
       Datastore.stopByTrainNo('1156', Config.hhkStation().stopId),
       Stop.everyday);

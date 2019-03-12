@@ -118,9 +118,9 @@ class Datastore {
   //   refreshStatuses() - refresh status from DepartureVision
   //   loadWatchedStops() / addWatchedStop() – load/add a stop the user wants to watch.
   // *******************************************************************
-  static bool _dataFilesLoaded = false;
-  static Future loadDataFiles() async {
-    if (_dataFilesLoaded) {
+  static bool _dataLoaded = false;
+  static Future loadData() async {
+    if (_dataLoaded) {
       print('loadDataFiles(): already loaded (${stationByStationName.length} stations, ' +
             '${trainByTripId.length} Trains, ${_stopByTripId.length} Stops)');
       return;
@@ -133,13 +133,13 @@ class Datastore {
     
     var timing = DateTime.now().difference(start).inMilliseconds;
     print('Loaded data files in ${timing}ms.');
-    _dataFilesLoaded = true;
+    _dataLoaded = true;
   }
 
   // Refresh the list of statuses for the given station, either directly from
   // the DepartureVision site, or using the cache (if available and fresh). 
   static Future refreshStatuses(Station station) async {
-    await loadDataFiles();
+    await loadData();
     print('Refreshing statuses...');
     var start = DateTime.now();
     String html = await _fetchDepartureVision(station);
@@ -151,27 +151,29 @@ class Datastore {
 
   static Future loadWatchedStops() async {
     await _loadPrefs();
+    await loadData();
     for (var ws in loadWatchedStopsFromJson(_prefs.getString(_watchedStopsKey) ?? '[]')) {
       print(ws);
-      watchedStops[ws.stop.id()] = ws;
+      addWatchedStop(ws);
     }
     print('Loaded ${watchedStops.length} watched stops:');
   }
 
   static Future addWatchedStop(WatchedStop watchedStop) async {
     if (watchedStops.containsKey(watchedStop.stop.id())) {
-      print('Already watching ws');
+      print('Already watching $watchedStop');
       return; 
     }
     watchedStops[watchedStop.stop.id()] = watchedStop;
-    await ChooChooScheduler.registerWatchedStop(watchedStop);
     await _saveWatchedStops();
+    await ChooChooScheduler.updateScheduledNotifications();
   }
 
   static Future clearWatchedStops() async {
     print('Clearing watched stops!');
     watchedStops.clear();
     await _saveWatchedStops();
+    await ChooChooScheduler.updateScheduledNotifications();
   }
 
   // *******************************************************************
@@ -283,15 +285,19 @@ class Datastore {
       return cached;
     }
 
-    HttpClient http = HttpClient();
+    HttpClient http = new HttpClient();
+    http.userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36';
+    http.connectionTimeout = Duration(seconds: 30);
     var uri = Uri.http('dv.njtransit.com', '/mobile/tid-mobile.aspx', {'sid': station.twoLetterCode});
     final maxAttempts = 3;
     final retryWait = 5;
     for (var attempt = 0; attempt < maxAttempts; ++attempt) {
       try {
-        print('Fetching $uri');
+        print('Fetching $uri, attempt $attempt');
         var request = await http.getUrl(uri);
+        print('got URL');
         var response = await request.close();
+        print('got response');
         var responseBody = await response.transform(utf8.decoder).join();
         print('Response ${responseBody.substring(0, 50)}');
         return responseBody;

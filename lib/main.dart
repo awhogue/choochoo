@@ -17,7 +17,6 @@ class ChooChooApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Config.setBundle(DefaultAssetBundle.of(context));
-    // Config.prodConfig(DefaultAssetBundle.of(context));
     Config.setOfflineDebugConfig();
     Config.forceScheduledNotification = true;
     print(Config.configString());
@@ -50,7 +49,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
 
   Future _loadData() async {
     ChooChooScheduler.stateInitialize(_notifications);
-    await Datastore.loadDataFiles();
+    await Datastore.loadData();
     if (Config.debug()) {
       await Datastore.clearWatchedStops();
       if (Config.forceScheduledNotification) {
@@ -74,7 +73,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
   Future _addMyTrains() async {
     await Datastore.addWatchedStop(
       WatchedStop(Datastore.stopByTripId(Config.id803am, Config.hhkStation().stopId),
-                  Stop.weekdays)
+                  Stop.everyday)
     );
   }
 
