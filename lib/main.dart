@@ -17,8 +17,8 @@ class ChooChooApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Config.setBundle(DefaultAssetBundle.of(context));
-    Config.setOfflineDebugConfig();
-    Config.forceScheduledNotification = true;
+    //Config.setOfflineDebugConfig();
+    //Config.forceScheduledNotification = true;
     print(Config.configString());
 
     return MaterialApp(
@@ -40,24 +40,17 @@ class ChooChooHome extends StatefulWidget {
 }
 
 class _ChooChooHomeState extends State<ChooChooHome> {
-
   ChooChooNotifications _notifications;
   
   _ChooChooHomeState() {
-    _notifications = ChooChooNotifications(context);
+    _notifications = ChooChooNotifications();
   } 
 
   Future _loadData() async {
     ChooChooScheduler.stateInitialize(_notifications);
     await Datastore.loadData();
     if (Config.debug()) {
-      await Datastore.clearWatchedStops();
-      if (Config.forceScheduledNotification) {
-        Config.setupFakes(
-          DateTime.now().add(Duration(minutes: 10)),
-          DateTime.now().add(Duration(minutes: 15)),
-          TrainState.Late);
-      } else if (Config.primeCacheFromTestData) {
+      if (Config.primeCacheFromTestData) {
         await FileUtils.primeCacheFromTestData();
         await Datastore.refreshStatuses(Config.hhkStation());
       }
@@ -65,16 +58,19 @@ class _ChooChooHomeState extends State<ChooChooHome> {
       await Datastore.loadWatchedStops();
       await _addMyTrains();
       await Datastore.refreshStatuses(Config.hhkStation());
+      await Datastore.refreshStatuses(Config.hobStation());
     }
 
     return true;
   }
 
   Future _addMyTrains() async {
-    await Datastore.addWatchedStop(
-      WatchedStop(Datastore.stopByTripId(Config.id803am, Config.hhkStation().stopId),
-                  Stop.everyday)
-    );
+    await Datastore.addWatchedStops(
+      Config.myHHKTrains.values.map(
+        (id) => WatchedStop(Datastore.stopByTripId(id, Config.hhkStation().stopId), Stop.everyday)).toList());
+    await Datastore.addWatchedStops(
+      Config.myHOBTrains.values.map(
+        (id) => WatchedStop(Datastore.stopByTripId(id, Config.hobStation().stopId), Stop.everyday)).toList());
   }
 
   // Filter the statuses to only include the trains we're watching.

@@ -1,16 +1,17 @@
 // Manage sending notifications to the user when a watched train is updated.
 
 import 'dart:async';
-import 'package:flutter/material.dart';
+//import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'display_utils.dart';
 import 'model.dart';
 
 class ChooChooNotifications {
   FlutterLocalNotificationsPlugin notifier = new FlutterLocalNotificationsPlugin();
-  BuildContext context;
+  //BuildContext context;
 
-  ChooChooNotifications(this.context) {
+  //ChooChooNotifications(this.context) {
+  ChooChooNotifications() {
     // initialise the plugin. app_icon needs to be a added as a drawable resource to the Android head project
     var androidInit = new AndroidInitializationSettings('notification_icon');
     var iosInit = new IOSInitializationSettings();

@@ -1,6 +1,7 @@
 // Handle scheduled tasks, like fetching DepartureVision and notifying the user 
 // when a watched train is posted.
 
+import 'dart:isolate';
 import 'package:android_alarm_manager/android_alarm_manager.dart';
 import 'config.dart';
 import 'datastore.dart';
@@ -8,7 +9,7 @@ import 'model.dart';
 import 'notifications.dart';
 
 class ChooChooScheduler {
-  static ChooChooNotifications _notifications;
+  static ChooChooNotifications _notifications = ChooChooNotifications();
 
   static appInitialize() async {
     print('ChooChooScheduler.appInitialize()');
@@ -19,8 +20,10 @@ class ChooChooScheduler {
     _notifications = notifications;
   }
 
-  static WatchedStop _nextDeparture() {
-    Datastore.loadWatchedStops();
+  static _nextDeparture() async {
+    print('_nextDeparture() isolate ${Isolate.current.hashCode}');
+
+    await Datastore.loadWatchedStops();
     List<WatchedStop> watchedStops = Datastore.watchedStops.values.toList();
     print('_nextDeparture found ${watchedStops.length} stops');
     if (watchedStops.isEmpty) return null;
@@ -31,12 +34,12 @@ class ChooChooScheduler {
   // Schedule the next time to wake up and check train status based on the current
   // set of WatchedStops.
   static updateScheduledNotifications() async {
-    if (Datastore.watchedStops.isEmpty) {
-      print('scheduleNextNotification(): no WatchedStops registered');
+    WatchedStop ws = await _nextDeparture();
+    if (null == ws) {
+      print('updateScheduledNotifications(): no WatchedStops registered');
       return;
     }
-    WatchedStop ws =_nextDeparture();
-    print('registerWatchedStop($ws)');
+    print('updateScheduledNotifications($ws)');
     print('ws.stop.nextScheduledDeparture: ${ws.stop.nextScheduledDeparture()}');
     print('now:                            ${DateTime.now()}');
     var delay = ws.stop.nextScheduledDeparture().difference(DateTime.now());
@@ -63,8 +66,10 @@ class ChooChooScheduler {
   }
 
   static void _checkWatchedStops() async {
+    Config.forceScheduledNotification = true;
+
     print('_checkWatchedStops()');
-    WatchedStop ws = _nextDeparture();
+    WatchedStop ws = await _nextDeparture();
     print('next departure: $ws');
     if (null == ws) return;
 

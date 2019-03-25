@@ -53,7 +53,7 @@ class Config {
   ///////////// Assets /////////////
 
   // The asset bundle we're using for this instantiation.
-  static AssetBundle bundle;
+  static AssetBundle bundle = rootBundle;
   static setBundle(AssetBundle b) => bundle = b;
 
   ///////////// Testing /////////////
@@ -63,17 +63,30 @@ class Config {
   static final String _hob = 'HOBOKEN';  // Hoboken station name.
   static hhkStation() => Datastore.stationByStationName[_hhk];  // Assumes data has been loaded.
   static hobStation() => Datastore.stationByStationName[_hob];  // Assumes data has been loaded.
-  static final int id803am = 1162;      // tripId for the 8:03am from Ho-Ho-Kus to Hoboken.
+  // tripIds for my common trains
+  // TODO: look these up using the time+station, rather than the tripId, which can (and do) change with each data dump.
+  static final Map<String, int> myHHKTrains = {
+    "733am HHK to HOB": 1123,
+    "744am HHK to HOB": 1118,
+    "803am HHK to HOB": 1124,
+    "821am HHK to HOB": 1126,
+  };
+  static final Map<String, int> myHOBTrains = {
+    "520pm HOB to HHK": 1228,
+    "549pm HOB to HHK": 1229,
+    "623pm HOB to HHK": 1224,
+  };
+  
 
   // Fake a WatchedStop and Status for testing.
   static WatchedStop setupFakes(DateTime departureTime, DateTime calculatedDepartureTime, TrainState state) {    
     Train train = Train('999999', Config.hobStation(), 999999);
     Stop stop = Stop(train, Config.hhkStation(), departureTime, Stop.everyday);
-    WatchedStop watchedStop = WatchedStop(stop, [DateTime.now().weekday]);
+    WatchedStop watchedStop = WatchedStop(stop, Stop.everyday);
     TrainStatus status = TrainStatus(stop, "FAKE STOP", state, calculatedDepartureTime, DateTime.now());
     Datastore.addTrain(train);
     Datastore.addStop(stop);
-    Datastore.addWatchedStop(watchedStop);
+    Datastore.addWatchedStops([watchedStop]);
     Datastore.addStatus(status);
     return watchedStop;
   }

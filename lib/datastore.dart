@@ -114,14 +114,14 @@ class Datastore {
   // *******************************************************************
   // Initialization functions to load data.
   // The main API is:
-  //   loadDataFiles() – load "static" data from disk.
+  //   loadData() – load "static" data from disk.
   //   refreshStatuses() - refresh status from DepartureVision
   //   loadWatchedStops() / addWatchedStop() – load/add a stop the user wants to watch.
   // *******************************************************************
   static bool _dataLoaded = false;
   static Future loadData() async {
     if (_dataLoaded) {
-      print('loadDataFiles(): already loaded (${stationByStationName.length} stations, ' +
+      print('loadData(): already loaded (${stationByStationName.length} stations, ' +
             '${trainByTripId.length} Trains, ${_stopByTripId.length} Stops)');
       return;
     }
@@ -131,6 +131,13 @@ class Datastore {
     await _loadTrains();
     await _loadStops();
     
+    if (Config.forceScheduledNotification) {
+      Config.setupFakes(
+        DateTime.now().add(Duration(minutes: 10)),
+        DateTime.now().add(Duration(minutes: 15)),
+        TrainState.Late);
+    }
+
     var timing = DateTime.now().difference(start).inMilliseconds;
     print('Loaded data files in ${timing}ms.');
     _dataLoaded = true;
@@ -154,17 +161,20 @@ class Datastore {
     await loadData();
     for (var ws in loadWatchedStopsFromJson(_prefs.getString(_watchedStopsKey) ?? '[]')) {
       print(ws);
-      addWatchedStop(ws);
+      addWatchedStops([ws]);
     }
     print('Loaded ${watchedStops.length} watched stops:');
   }
 
-  static Future addWatchedStop(WatchedStop watchedStop) async {
-    if (watchedStops.containsKey(watchedStop.stop.id())) {
-      print('Already watching $watchedStop');
-      return; 
+  static Future addWatchedStops(List<WatchedStop> stops) async {
+    for (var watchedStop in stops) {
+      if (watchedStops.containsKey(watchedStop.stop.id())) {
+        print('Already watching $watchedStop');
+        return; 
+      }
+      print('addWatchedStop($watchedStop)');
+      watchedStops[watchedStop.stop.id()] = watchedStop;
     }
-    watchedStops[watchedStop.stop.id()] = watchedStop;
     await _saveWatchedStops();
     await ChooChooScheduler.updateScheduledNotifications();
   }
@@ -295,11 +305,9 @@ class Datastore {
       try {
         print('Fetching $uri, attempt $attempt');
         var request = await http.getUrl(uri);
-        print('got URL');
         var response = await request.close();
-        print('got response');
         var responseBody = await response.transform(utf8.decoder).join();
-        print('Response ${responseBody.substring(0, 50)}');
+        print('Response of ${responseBody.length} bytes:\n${responseBody.substring(0, 200)}...');
         return responseBody;
       } catch (exception) {
         print('EXCEPTION fetching $uri on attempt $attempt:');
@@ -393,18 +401,22 @@ class Datastore {
   }
   static const _watchedStopsKey = 'ChooChooWatchedStopsKey';
   static List<WatchedStop> loadWatchedStopsFromJson(String jsonStr) {
+    print('loadWatchedStopsFromJson($jsonStr)');
     List<dynamic> watchedStopsJson = json.decode(jsonStr);
     return watchedStopsJson.map<WatchedStop>((wsJson) => _watchedStopFromJson(wsJson)).toList();
   }
   static Future _saveWatchedStops() async {
     await _loadPrefs();
-    _prefs.setString(_watchedStopsKey, watchedStopsToJson(watchedStops.values.toList()));
+    String json = watchedStopsToJson(watchedStops.values.toList());
+    print('Saving watchedStops:\n$json');
+    _prefs.setString(_watchedStopsKey, json);
   }
   static String watchedStopsToJson(List<WatchedStop> watchedStops) {
     return json.encode(watchedStops.map((ws) => _watchedStopToJson(ws)).toList());
   }
 
   static WatchedStop _watchedStopFromJson(Map<String, dynamic> json) {
+    print('_watchedStopFromJson(${json["tripId"]}, ${json["departureStationId"]})');
     return WatchedStop(stopByTripId(json['tripId'], json['departureStationId']), 
                        List<int>.from(json['days']));
   }
