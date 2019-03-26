@@ -116,7 +116,7 @@ class Datastore {
   // The main API is:
   //   loadData() – load "static" data from disk.
   //   refreshStatuses() - refresh status from DepartureVision
-  //   loadWatchedStops() / addWatchedStop() – load/add a stop the user wants to watch.
+  //   loadWatchedStops() / addWatchedStops() – load/add a stop the user wants to watch.
   // *******************************************************************
   static bool _dataLoaded = false;
   static Future loadData() async {
@@ -160,13 +160,13 @@ class Datastore {
     await _loadPrefs();
     await loadData();
     for (var ws in loadWatchedStopsFromJson(_prefs.getString(_watchedStopsKey) ?? '[]')) {
-      print(ws);
       addWatchedStops([ws]);
     }
-    print('Loaded ${watchedStops.length} watched stops:');
+    print('Loaded ${watchedStops.length} watched stops');
   }
 
-  static Future addWatchedStops(List<WatchedStop> stops) async {
+  static Future addWatchedStops(List<WatchedStop> stops, [bool updateNotifications = true]) async {
+    print('addWatchedStops([${stops.length} stops])');
     for (var watchedStop in stops) {
       if (watchedStops.containsKey(watchedStop.stop.id())) {
         print('Already watching $watchedStop');
@@ -176,7 +176,9 @@ class Datastore {
       watchedStops[watchedStop.stop.id()] = watchedStop;
     }
     await _saveWatchedStops();
-    await ChooChooScheduler.updateScheduledNotifications();
+    if (updateNotifications) {
+      await ChooChooScheduler.updateScheduledNotifications();
+    }
   }
 
   static Future clearWatchedStops() async {
@@ -324,18 +326,19 @@ class Datastore {
   static final DateFormat _timeDisplayFormat = new DateFormat.jm();
   static DateTime _parseLastUpdatedTime(Document document) {
     // Select all the divs because status messages sometimes pop up with weird formatting.
-    var div = document.querySelector('#Label2');
-    if (_updatedTimeRe.hasMatch(div.text)) {
-      var timeStr = _updatedTimeRe.firstMatch(div.text).group(1);
-      return _timeDisplayFormat.parse(timeStr);
-    } else {
-      print('Could not find last updated time! Defaulting to now.');
-      // TODO: deal with time zones 
-      // https://stackoverflow.com/questions/26257481/how-to-convert-datetime-into-different-timezones
-      // https://pub.dartlang.org/documentation/timezone/latest/
-      var now = DateTime.now();
-      return new DateTime(now.year, now.month, now.day, now.hour, now.minute);
+    var divs = document.querySelectorAll('td > div');
+    for (var div in divs) {
+      if (_updatedTimeRe.hasMatch(div.text)) {
+        var timeStr = _updatedTimeRe.firstMatch(div.text).group(1);
+        return _timeDisplayFormat.parse(timeStr);
+      }
     }
+    print('Could not find last updated time! Defaulting to now.');
+    // TODO: deal with time zones 
+    // https://stackoverflow.com/questions/26257481/how-to-convert-datetime-into-different-timezones
+    // https://pub.dartlang.org/documentation/timezone/latest/
+    var now = DateTime.now();
+    return new DateTime(now.year, now.month, now.day, now.hour, now.minute);
   }
 
   static RegExp _inNMinutesRe = new RegExp(r'in (\d+) Min');
@@ -368,14 +371,18 @@ class Datastore {
 
     var document = parse(html);
     var lastUpdated = _parseLastUpdatedTime(document);
+    print('DV last updated $lastUpdated');
 
     var rows = document.querySelectorAll('#GridView1 > tbody > tr');
+    print('Got ${rows.length} table rows');
     for (var row in rows) {
-      var cells = row.querySelectorAll('td');
-      if (cells.length < 7) continue;
-      var trainNo = cells[5].text.trim();
+      var cells = row.querySelectorAll('td').map((c) => c.text.trim()).toList();
+      print('row has ${cells.length} cells: $cells');
+      // Expecting: Scheduled Departure, Destination, Track, Line, Train #, Status
+      if (cells.length < 6) continue;
+      var trainNo = cells[4];
       if (int.tryParse(trainNo) == null) continue;
-      var rawStatus = cells[6].text.trim();
+      var rawStatus = cells[5];
       var stop = stopByTrainNo(trainNo, station.stopId);
 
       TrainStatus status = _parseRawStatus(rawStatus, lastUpdated, stop);

@@ -65,11 +65,15 @@ class Stop {
     return int.parse('$departureStationId$paddedTripId');
   }
 
+  String departureTimeString() {
+    return DisplayUtils.timeDisplayFormat.format(scheduledDepartureTime);
+  }
+
   @override
   String toString() {
     return 
-      '$train from $departureStation ' +
-      'at ${DisplayUtils.timeDisplayFormat.format(scheduledDepartureTime)}';
+      '#${train.trainNo} ${departureTimeString()} ' +
+      '${departureStation.stationName}->${train.destinationStation.stationName}';
   }
 
   // Return the date and time of the next scheduled departure for this train.
@@ -78,16 +82,17 @@ class Stop {
     var departureToday = new DateTime(
       now.year, now.month, now.day, 
       scheduledDepartureTime.hour, scheduledDepartureTime.minute);
-    print('now:         $now');
-    print('departToday: $departureToday');
-
+    
     if (now.isBefore(departureToday) && 
         this.serviceDays.contains(departureToday.weekday)) {
+      print('Next departure: $departureToday');
       return departureToday;
     } else {
       // For now, just go to tomorrow's departure.
       // TODO: calculate the correct next day that has a departure (e.g. if it's the weekend)
-      return departureToday.add(Duration(days: 1));
+      var departureTomorrow = departureToday.add(Duration(days: 1));
+      print('Next departure: $departureTomorrow');
+      return departureTomorrow;
     }
   }
 }
@@ -136,6 +141,11 @@ class TrainStatus {
       return calculatedDepartureTime;
     }
   }
+
+  int getMinutesUntilDeparture() {
+    var dur = calculatedDepartureTime.difference(DateTime.now());
+    return dur.inMinutes;
+  }
 }
 
 // Represents a stop that a user is "watching" (i.e. wants to get notifications for).
@@ -149,6 +159,6 @@ class WatchedStop {
 
   @override 
   String toString() {
-    return 'WatchedStop $stop on $days';
+    return 'WS: $stop on $days';
   }
 }

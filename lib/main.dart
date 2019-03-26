@@ -47,6 +47,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
   } 
 
   Future _loadData() async {
+    print("_loadData()");
     ChooChooScheduler.stateInitialize(_notifications);
     await Datastore.loadData();
     if (Config.debug()) {
@@ -55,6 +56,7 @@ class _ChooChooHomeState extends State<ChooChooHome> {
         await Datastore.refreshStatuses(Config.hhkStation());
       }
     } else {
+      await Datastore.clearWatchedStops(); // For debugging.
       await Datastore.loadWatchedStops();
       await _addMyTrains();
       await Datastore.refreshStatuses(Config.hhkStation());
@@ -67,10 +69,12 @@ class _ChooChooHomeState extends State<ChooChooHome> {
   Future _addMyTrains() async {
     await Datastore.addWatchedStops(
       Config.myHHKTrains.values.map(
-        (id) => WatchedStop(Datastore.stopByTripId(id, Config.hhkStation().stopId), Stop.everyday)).toList());
+        (id) => WatchedStop(Datastore.stopByTripId(id, Config.hhkStation().stopId), Stop.everyday)).toList(),
+        false);
     await Datastore.addWatchedStops(
       Config.myHOBTrains.values.map(
-        (id) => WatchedStop(Datastore.stopByTripId(id, Config.hobStation().stopId), Stop.everyday)).toList());
+        (id) => WatchedStop(Datastore.stopByTripId(id, Config.hobStation().stopId), Stop.everyday)).toList(),
+        true);
   }
 
   // Filter the statuses to only include the trains we're watching.

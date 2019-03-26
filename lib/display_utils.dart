@@ -43,9 +43,10 @@ class DisplayUtils {
       case TrainState.Early:
         return 
           'now at ${timeString(status.calculatedDepartureTime)}';
+      case TrainState.OnTime:
+        return 'in ${status.getMinutesUntilDeparture()} min';
       case TrainState.Canceled:
       case TrainState.NotPosted:
-      case TrainState.OnTime:
       case TrainState.AllAboard:
       case TrainState.Unknown:
       default:
