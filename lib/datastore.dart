@@ -71,8 +71,8 @@ class Datastore {
   static final Map<String, Map<int, TrainStatus>> statuses = Map();
 
   static addStatus(TrainStatus status) {
-    statuses.putIfAbsent(status.stop.departureStation.stationName, () => Map());
-    statuses[status.stop.departureStation.stationName][status.stop.id()] = status;
+    statuses.putIfAbsent(status.departureStationName(), () => Map());
+    statuses[status.departureStationName()][status.stop.id()] = status;
   }
   
   // The list of statuses in chronological order for the given station.
@@ -83,7 +83,7 @@ class Datastore {
     }
     var statusList = statuses[departureStation.stationName].values.toList();
     if (null != destinationStation) {
-      statusList.retainWhere((status) => status.stop.train.destinationStation.stationName == destinationStation.stationName);
+      statusList.retainWhere((status) => status.destinationStationName() == destinationStation.stationName);
     }
     statusList.sort((a, b) => a.getDepartureTime().compareTo(b.getDepartureTime()));
     return statusList;

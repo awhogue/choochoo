@@ -132,10 +132,15 @@ class TrainStatus {
   String toString() {
     var rawStatusStr = (rawStatus.isEmpty) ? '' : '$rawStatus, ';
     return 
-      'Status for ${stop.train.trainNo} to ${stop.train.destinationStation} ' + 
+      'Status for ${trainNo()} to ${stop.train.destinationStation} ' + 
       '${DisplayUtils.shortStatus(this)}: ${DisplayUtils.timeStatus(this)} ' +
       '(${rawStatusStr}updated ${DisplayUtils.timeDisplayFormat.format(lastUpdated)})';
   }
+
+  DateTime scheduledDepartureTime() => stop.scheduledDepartureTime;
+  String trainNo() => stop.train.trainNo;
+  String departureStationName() => stop.departureStation.stationName;
+  String destinationStationName() => stop.train.destinationStation.stationName;
 
   // Return the best known departure time for this train, meaning the scheduled time if no
   // status has been posted, or the calculated time if one has.

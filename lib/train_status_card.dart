@@ -29,12 +29,12 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
             children: [
               Expanded(
                 child: Text(
-                  'Train #${status.stop.train.trainNo} to ${status.stop.train.destinationStation.stationName}',
+                  'Train #${status.trainNo()} to ${status.destinationStationName()}',
                   style: Theme.of(context).textTheme.title,
                 )
               ),
               Text(
-                DisplayUtils.timeString(status.stop.scheduledDepartureTime),
+                DisplayUtils.timeString(status.scheduledDepartureTime()),
                 style: Theme.of(context).textTheme.title,
               )
             ]

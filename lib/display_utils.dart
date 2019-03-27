@@ -6,7 +6,6 @@ import 'model.dart';
 class DisplayUtils {
   static final DateFormat timeDisplayFormat = new DateFormat.jm();
 
-
   static String _statusMinutesStr(int minutes) {
     if (minutes == 0) return 'On time';
     var minStr = (minutes.abs() == 1) ? 'minute' : 'minutes';
@@ -23,7 +22,7 @@ class DisplayUtils {
         return 'On time';
       case TrainState.Late:
       case TrainState.Early: {
-        var calculatedDepartureDiff = status.calculatedDepartureTime.difference(status.stop.scheduledDepartureTime).inMinutes;
+        var calculatedDepartureDiff = status.calculatedDepartureTime.difference(status.scheduledDepartureTime()).inMinutes;
         return _statusMinutesStr(calculatedDepartureDiff);
       }
       case TrainState.AllAboard:
@@ -42,15 +41,16 @@ class DisplayUtils {
       case TrainState.Late:
       case TrainState.Early:
         return 
-          'now at ${timeString(status.calculatedDepartureTime)}';
+          'Now at ${timeString(status.getDepartureTime())}';
       case TrainState.OnTime:
-        return 'in ${status.getMinutesUntilDeparture()} min';
-      case TrainState.Canceled:
+        return 'In ${status.getMinutesUntilDeparture()} min';
       case TrainState.NotPosted:
+        return 'Scheduled at ${timeString(status.scheduledDepartureTime())}';
+      case TrainState.Canceled:
       case TrainState.AllAboard:
       case TrainState.Unknown:
       default:
-        return '---';
+        return '';
     }
   }
 
