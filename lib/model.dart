@@ -76,13 +76,18 @@ class Stop {
       '${departureStation.stationName}->${train.destinationStation.stationName}';
   }
 
+  // Return a full DateTime (including year/month/day) for today's departure (even if it's already passed).
+  DateTime todaysDeparture() {
+    var now = DateTime.now();
+    return DateTime(
+      now.year, now.month, now.day, 
+      scheduledDepartureTime.hour, scheduledDepartureTime.minute);
+  }
+
   // Return the date and time of the next scheduled departure for this train.
   DateTime nextScheduledDeparture() {
     var now = DateTime.now();
-    var departureToday = new DateTime(
-      now.year, now.month, now.day, 
-      scheduledDepartureTime.hour, scheduledDepartureTime.minute);
-    
+    var departureToday = todaysDeparture();
     if (now.isBefore(departureToday) && 
         this.serviceDays.contains(departureToday.weekday)) {
       print('Next departure: $departureToday');

@@ -7,6 +7,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:html/parser.dart';
 import 'package:html/dom.dart';
 import 'package:intl/intl.dart';
@@ -75,12 +76,15 @@ class Datastore {
   }
   
   // The list of statuses in chronological order for the given station.
-  static List<TrainStatus> statusesInOrder(Station station) {
-    if (!statuses.containsKey(station.stationName)) {
-      print('No statuses for ${station.stationName}, did you call refreshStatuses?');
+  static List<TrainStatus> statusesInOrder(Station departureStation, [Station destinationStation]) {
+    if (!statuses.containsKey(departureStation.stationName)) {
+      print('No statuses for ${departureStation.stationName}, did you call refreshStatuses?');
       return [];
     }
-    var statusList = statuses[station.stationName].values.toList();
+    var statusList = statuses[departureStation.stationName].values.toList();
+    if (null != destinationStation) {
+      statusList.retainWhere((status) => status.stop.train.destinationStation.stationName == destinationStation.stationName);
+    }
     statusList.sort((a, b) => a.getDepartureTime().compareTo(b.getDepartureTime()));
     return statusList;
   }
@@ -110,6 +114,18 @@ class Datastore {
 
   // Stops the user is watching, keyed on Stop.id()
   static final Map<int, WatchedStop> watchedStops = Map();
+
+  // Return the next scheduled upcoming stop being watched.
+  static nextWatchedDeparture() async {
+    print('_nextWatchedDeparture() isolate ${Isolate.current.hashCode}');
+
+    await loadWatchedStops();
+    List<WatchedStop> watchedStops = Datastore.watchedStops.values.toList();
+    print('_nextWatchedDeparture found ${watchedStops.length} stops');
+    if (watchedStops.isEmpty) return null;
+    watchedStops.sort((a, b) => a.stop.nextScheduledDeparture().compareTo(b.stop.nextScheduledDeparture()));
+    return watchedStops[0];
+  }
 
   // *******************************************************************
   // Initialization functions to load data.
@@ -325,19 +341,20 @@ class Datastore {
   static RegExp _updatedTimeRe = new RegExp(r'(\d+:\d+ [AP]M)');
   static final DateFormat _timeDisplayFormat = new DateFormat.jm();
   static DateTime _parseLastUpdatedTime(Document document) {
+    var now = DateTime.now();
     // Select all the divs because status messages sometimes pop up with weird formatting.
     var divs = document.querySelectorAll('td > div');
     for (var div in divs) {
       if (_updatedTimeRe.hasMatch(div.text)) {
         var timeStr = _updatedTimeRe.firstMatch(div.text).group(1);
-        return _timeDisplayFormat.parse(timeStr);
+        var time = _timeDisplayFormat.parse(timeStr);
+        return new DateTime(now.year, now.month, now.day, time.hour, time.minute);
       }
     }
     print('Could not find last updated time! Defaulting to now.');
     // TODO: deal with time zones 
     // https://stackoverflow.com/questions/26257481/how-to-convert-datetime-into-different-timezones
     // https://pub.dartlang.org/documentation/timezone/latest/
-    var now = DateTime.now();
     return new DateTime(now.year, now.month, now.day, now.hour, now.minute);
   }
 

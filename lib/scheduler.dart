@@ -1,7 +1,6 @@
 // Handle scheduled tasks, like fetching DepartureVision and notifying the user 
 // when a watched train is posted.
 
-import 'dart:isolate';
 import 'package:android_alarm_manager/android_alarm_manager.dart';
 import 'config.dart';
 import 'datastore.dart';
@@ -20,21 +19,10 @@ class ChooChooScheduler {
     _notifications = notifications;
   }
 
-  static _nextDeparture() async {
-    print('_nextDeparture() isolate ${Isolate.current.hashCode}');
-
-    await Datastore.loadWatchedStops();
-    List<WatchedStop> watchedStops = Datastore.watchedStops.values.toList();
-    print('_nextDeparture found ${watchedStops.length} stops');
-    if (watchedStops.isEmpty) return null;
-    watchedStops.sort((a, b) => a.stop.nextScheduledDeparture().compareTo(b.stop.nextScheduledDeparture()));
-    return watchedStops[0];
-  }
-
   // Schedule the next time to wake up and check train status based on the current
   // set of WatchedStops.
   static updateScheduledNotifications() async {
-    WatchedStop ws = await _nextDeparture();
+    WatchedStop ws = await Datastore.nextWatchedDeparture();
     if (null == ws) {
       print('updateScheduledNotifications(): no WatchedStops registered');
       return;
@@ -69,7 +57,7 @@ class ChooChooScheduler {
     Config.forceScheduledNotification = true;
 
     print('_checkWatchedStops()');
-    WatchedStop ws = await _nextDeparture();
+    WatchedStop ws = await Datastore.nextWatchedDeparture();
     print('next departure: $ws');
     if (null == ws) return;
 

@@ -63,7 +63,8 @@ class _ChooChooHomeState extends State<ChooChooHome> {
       await Datastore.refreshStatuses(Config.hobStation());
     }
 
-    return true;
+    var nextDeparture = await Datastore.nextWatchedDeparture();
+    return nextDeparture;
   }
 
   Future _addMyTrains() async {
@@ -124,8 +125,17 @@ class _ChooChooHomeState extends State<ChooChooHome> {
                   }
                 }
 
+                var nextDeparture = snapshot.data;
+                if (null == nextDeparture) {
+                  print('snapshot.data is null');
+                  return Center(child: Text('Set up some trains to watch!'));
+                }
+
+                var displayStatuses = Datastore.statusesInOrder(
+                  Config.hhkStation(), 
+                  nextDeparture.stop.train.destinationStation);
                 return ListView(
-                  children: Datastore.statusesInOrder(Config.hhkStation()).map((ts) => TrainStatusCard(ts)).toList(),
+                  children: displayStatuses.map((ts) => TrainStatusCard(ts)).toList(),
                 );
               }
             }
