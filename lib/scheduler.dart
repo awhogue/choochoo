@@ -28,9 +28,9 @@ class ChooChooScheduler {
       return;
     }
     print('updateScheduledNotifications($ws)');
-    print('ws.stop.nextScheduledDeparture: ${ws.stop.nextScheduledDeparture()}');
-    print('now:                            ${DateTime.now()}');
-    var delay = ws.stop.nextScheduledDeparture().difference(DateTime.now());
+    print('nextScheduledDeparture: ${ws.nextScheduledDeparture()}');
+    print('now:                    ${DateTime.now()}');
+    var delay = ws.nextScheduledDeparture().difference(DateTime.now());
     print('Initial delay: $delay');
     if (delay > Config.startCheckingDV) {
       delay = delay - Config.startCheckingDV;
@@ -40,25 +40,13 @@ class ChooChooScheduler {
       print('Already inside time to start checking DV. Delay: $delay');
     }
 
-    print('oneShot($delay)');
     // TODO: unregister any existing callbacks we've already set up.
-    bool result = await AndroidAlarmManager.oneShot(
-      delay, 
-      ws.stop.id(), 
-      _checkWatchedStops,
-      exact: true,
-      wakeup: true
-    );
-    print('Registered timer in $delay (${DateTime.now().add(delay)}) for $ws');
-    print('result: $result');
+    await _scheduleOneShot(delay, ws.stop.id());
   }
 
   static void _checkWatchedStops() async {
-    Config.forceScheduledNotification = true;
-
-    print('_checkWatchedStops()');
     WatchedStop ws = await Datastore.nextWatchedDeparture();
-    print('next departure: $ws');
+    print('_checkWatchedStops(): next departure: $ws');
     if (null == ws) return;
 
     await Datastore.refreshStatuses(ws.stop.departureStation);
@@ -71,8 +59,19 @@ class ChooChooScheduler {
     if (null != status) {
       _notifications.trainStatusNotification(status);
       if (status.calculatedDepartureTime.isAfter(DateTime.now())) {
-        AndroidAlarmManager.oneShot(Config.recheckDV, ws.stop.id(), _checkWatchedStops);
+        await _scheduleOneShot(Config.recheckDV, ws.stop.id());
       }
     }
+  }
+
+  static _scheduleOneShot(Duration delay, int id) {
+    print('Registered oneShot in $delay (${DateTime.now().add(delay)})');
+    return AndroidAlarmManager.oneShot(
+      delay, 
+      id, 
+      _checkWatchedStops,
+      exact: true,
+      wakeup: true
+    );
   }
 }

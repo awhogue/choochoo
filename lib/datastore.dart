@@ -123,7 +123,7 @@ class Datastore {
     List<WatchedStop> watchedStops = Datastore.watchedStops.values.toList();
     print('_nextWatchedDeparture found ${watchedStops.length} stops');
     if (watchedStops.isEmpty) return null;
-    watchedStops.sort((a, b) => a.stop.nextScheduledDeparture().compareTo(b.stop.nextScheduledDeparture()));
+    watchedStops.sort((a, b) => a.nextScheduledDeparture().compareTo(b.nextScheduledDeparture()));
     return watchedStops[0];
   }
 
@@ -182,13 +182,11 @@ class Datastore {
   }
 
   static Future addWatchedStops(List<WatchedStop> stops, [bool updateNotifications = true]) async {
-    print('addWatchedStops([${stops.length} stops])');
     for (var watchedStop in stops) {
       if (watchedStops.containsKey(watchedStop.stop.id())) {
-        print('Already watching $watchedStop');
         return; 
       }
-      print('addWatchedStop($watchedStop)');
+      print('Adding $watchedStop');
       watchedStops[watchedStop.stop.id()] = watchedStop;
     }
     await _saveWatchedStops();
@@ -440,7 +438,6 @@ class Datastore {
   }
 
   static WatchedStop _watchedStopFromJson(Map<String, dynamic> json) {
-    print('_watchedStopFromJson(${json["tripId"]}, ${json["departureStationId"]})');
     return WatchedStop(stopByTripId(json['tripId'], json['departureStationId']), 
                        List<int>.from(json['days']));
   }

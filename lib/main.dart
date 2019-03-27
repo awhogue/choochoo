@@ -18,7 +18,6 @@ class ChooChooApp extends StatelessWidget {
   Widget build(BuildContext context) {
     Config.setBundle(DefaultAssetBundle.of(context));
     //Config.setOfflineDebugConfig();
-    //Config.forceScheduledNotification = true;
     print(Config.configString());
 
     return MaterialApp(

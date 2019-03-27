@@ -171,4 +171,6 @@ class WatchedStop {
   String toString() {
     return 'WS: $stop on $days';
   }
+
+  DateTime nextScheduledDeparture() => stop.nextScheduledDeparture();
 }
