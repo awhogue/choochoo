@@ -34,7 +34,7 @@ class _TrainStatusCardState extends State<TrainStatusCard> {
                 )
               ),
               Text(
-                DisplayUtils.timeString(status.scheduledDepartureTime()),
+                status.departureTime().toString(),
                 style: Theme.of(context).textTheme.title,
               )
             ]

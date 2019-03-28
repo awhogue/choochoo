@@ -85,7 +85,7 @@ class Datastore {
     if (null != destinationStation) {
       statusList.retainWhere((status) => status.destinationStationName() == destinationStation.stationName);
     }
-    statusList.sort((a, b) => a.getDepartureTime().compareTo(b.getDepartureTime()));
+    statusList.sort((a, b) => a.getTodaysDepartureTime().compareTo(b.getTodaysDepartureTime()));
     return statusList;
   }
 
@@ -149,7 +149,7 @@ class Datastore {
     
     if (Config.forceScheduledNotification) {
       Config.setupFakes(
-        DateTime.now().add(Duration(minutes: 10)),
+        Time.fromDateTime(DateTime.now().add(Duration(minutes: 10))),
         DateTime.now().add(Duration(minutes: 15)),
         TrainState.Late);
     }
@@ -249,10 +249,11 @@ class Datastore {
       var tripId = row[0];
       var departureStationId = row[3];
       Train train = trainByTripId[tripId];
+      DateTime departureDateTime = _hourMinuteSecondsFormat.parse(row[2]);
       Stop stop = Stop(
         train, 
         stationByStopId[departureStationId], 
-        _hourMinuteSecondsFormat.parse(row[2]),
+        Time(departureDateTime.hour, departureDateTime.minute),
         Stop.everyday);
       addStop(stop);
     }
@@ -359,11 +360,11 @@ class Datastore {
   static RegExp _inNMinutesRe = new RegExp(r'in (\d+) Min');
   static TrainStatus _parseRawStatus(String rawStatus, DateTime lastUpdated,Stop stop) {
     if (rawStatus.isEmpty) {
-      return TrainStatus(stop, rawStatus, TrainState.NotPosted, stop.scheduledDepartureTime, lastUpdated);
+      return TrainStatus(stop, rawStatus, TrainState.NotPosted, stop.todaysDeparture(), lastUpdated);
     } else if (_inNMinutesRe.hasMatch(rawStatus)) {
       var minutesDelayed = int.parse(_inNMinutesRe.firstMatch(rawStatus).group(1));
       var calculatedDeparture = lastUpdated.add(new Duration(minutes: minutesDelayed));
-      var diff = calculatedDeparture.difference(stop.scheduledDepartureTime).inMinutes;
+      var diff = calculatedDeparture.difference(stop.todaysDeparture()).inMinutes;
       var state = () {
         // Trains within a minute of departure are considered "on time".
         if (diff <= 1) return TrainState.OnTime;
@@ -374,7 +375,7 @@ class Datastore {
     } else if (rawStatus.toUpperCase() == 'ALL ABOARD') {
       return TrainStatus(stop, rawStatus, TrainState.AllAboard, DateTime.now(), lastUpdated);
     } else if (rawStatus.toUpperCase() == 'CANCELLED') {
-      return TrainStatus(stop, rawStatus, TrainState.Canceled, stop.scheduledDepartureTime, lastUpdated);
+      return TrainStatus(stop, rawStatus, TrainState.Canceled, stop.todaysDeparture(), lastUpdated);
     } else {
       return null;
     }

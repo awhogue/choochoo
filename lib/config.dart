@@ -79,7 +79,7 @@ class Config {
   
 
   // Fake a WatchedStop and Status for testing.
-  static WatchedStop setupFakes(DateTime departureTime, DateTime calculatedDepartureTime, TrainState state) {    
+  static WatchedStop setupFakes(Time departureTime, DateTime calculatedDepartureTime, TrainState state) {    
     Train train = Train('999999', Config.hobStation(), 999999);
     Stop stop = Stop(train, Config.hhkStation(), departureTime, Stop.everyday);
     WatchedStop watchedStop = WatchedStop(stop, Stop.everyday);

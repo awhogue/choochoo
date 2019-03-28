@@ -21,9 +21,8 @@ class DisplayUtils {
       case TrainState.OnTime:
         return 'On time';
       case TrainState.Late:
-      case TrainState.Early: {
-        var calculatedDepartureDiff = status.calculatedDepartureTime.difference(status.scheduledDepartureTime()).inMinutes;
-        return _statusMinutesStr(calculatedDepartureDiff);
+      case TrainState.Early: {        
+        return _statusMinutesStr(status.getMinutesLateEarly());
       }
       case TrainState.AllAboard:
         return 'ALL ABOARD!';
@@ -41,11 +40,11 @@ class DisplayUtils {
       case TrainState.Late:
       case TrainState.Early:
         return 
-          'Now at ${timeString(status.getDepartureTime())}';
+          'Now at ${timeString(status.getTodaysDepartureTime())}';
       case TrainState.OnTime:
         return 'In ${status.getMinutesUntilDeparture()} min';
       case TrainState.NotPosted:
-        return 'Scheduled at ${timeString(status.scheduledDepartureTime())}';
+        return 'Scheduled at ${status.departureTime()}';
       case TrainState.Canceled:
       case TrainState.AllAboard:
       case TrainState.Unknown:

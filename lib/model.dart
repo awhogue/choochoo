@@ -1,5 +1,21 @@
 import 'display_utils.dart';
 
+// Represents a time (without a date associated with it).
+// (Because Dart only has a DateTime class and we need to just represent "8:03am"\
+// without associating it with a particular day).
+class Time {
+  int hour; // 0-23
+  int minute; // 0-59
+  Time(this.hour, this.minute);
+  static Time fromDateTime(DateTime dt) => Time(dt.hour, dt.minute);
+
+  @override
+  String toString() {
+    var ampm = (hour < 12) ? 'AM' : 'PM';
+    return '${hour % 12}:$minute $ampm';
+  }
+}
+
 // A single sation stop on the NJ Transit system.
 class Station {
   // The user-visible name of the station.
@@ -42,8 +58,8 @@ class Stop {
   final Train train;
   // The Station from which this train is departing.
   final Station departureStation;
-  // The scheduled time of departure for this train.
-  final DateTime scheduledDepartureTime;
+  // The scheduled time of departure for this train. 
+  final Time scheduledDepartureTime;
   // What days of the week the train runs. Defaults to every day until...
   // TODO: load handle non-weekday trains (and holidays!) using calendar_dates.txt
   final List<int> serviceDays;
@@ -66,7 +82,7 @@ class Stop {
   }
 
   String departureTimeString() {
-    return DisplayUtils.timeDisplayFormat.format(scheduledDepartureTime);
+    return scheduledDepartureTime.toString();
   }
 
   @override
@@ -137,24 +153,33 @@ class TrainStatus {
       '(${rawStatusStr}updated ${DisplayUtils.timeDisplayFormat.format(lastUpdated)})';
   }
 
-  DateTime scheduledDepartureTime() => stop.scheduledDepartureTime;
+  Time departureTime() => stop.scheduledDepartureTime;
+  DateTime todaysScheduledDeparture() => stop.todaysDeparture();
+  DateTime nextScheduledDeparture() => stop.nextScheduledDeparture();
+
   String trainNo() => stop.train.trainNo;
   String departureStationName() => stop.departureStation.stationName;
   String destinationStationName() => stop.train.destinationStation.stationName;
 
   // Return the best known departure time for this train, meaning the scheduled time if no
   // status has been posted, or the calculated time if one has.
-  DateTime getDepartureTime() {
+  DateTime getTodaysDepartureTime() {
     if (calculatedDepartureTime == null) {
-      return stop.scheduledDepartureTime;
+      return todaysScheduledDeparture();
     } else {
       return calculatedDepartureTime;
     }
   }
 
+  // How long from now until departure?
   int getMinutesUntilDeparture() {
     var dur = calculatedDepartureTime.difference(DateTime.now());
     return dur.inMinutes;
+  }
+
+  // How late/early is the the train versus schedule?
+  int getMinutesLateEarly() {
+    return calculatedDepartureTime.difference(todaysScheduledDeparture()).inMinutes;
   }
 }
 
